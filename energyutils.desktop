@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=EnergyUtils Launcher
+Comment=Launcher for EnergyUtils Minecraft client (Linux)
+Exec=/home/USER/EnergyUtils/run-energyutils.sh
+Icon=/home/USER/EnergyUtils/assets/icons/icon-512.png
+Terminal=false
+Type=Application
+Categories=Game;
+StartupWMClass=energyutils
