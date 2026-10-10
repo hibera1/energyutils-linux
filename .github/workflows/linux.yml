@@ -58,12 +58,13 @@ jobs:
           npm install --no-audit --no-fund || true
           npx electron --version || true
 
-      - name: Build AppImage (single-file, runs on any distro)
+      - name: Build AppImage (single-file, no FUSE required)
         run: |
-          npx electron-builder --linux AppImage --x64 --publish never || \
-          npx electron-builder --linux dir --x64 --publish never
+          npm run dist:linux || { echo "APPIMAGE_BUILD_FAILED"; npx electron-builder --linux dir --x64 --publish never; }
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: List release artifacts
+        run: ls -la release/ || true
 
       - name: Package extra files
         run: |
