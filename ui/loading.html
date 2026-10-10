@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EnergyUtils</title>
+  <script src="../assets/scripts/rv-launcher-common.js" defer></script>
+  <script src="../assets/scripts/eu-i18n.js" defer></script>
+  <style>
+    @font-face {
+      font-family: 'Onest';
+      src: url('../assets/fonts/Onest-Regular.ttf') format('truetype');
+      font-weight: 400;
+      font-style: normal;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 1120px;
+      height: 650px;
+      overflow: hidden;
+      background: #141417;
+      font-family: 'Onest', sans-serif;
+      user-select: none;
+    }
+
+    #app { opacity: 0; transition: opacity 0.22s ease; }
+    body.ready #app { opacity: 1; }
+
+    .app {
+      position: relative;
+      width: 1120px;
+      height: 650px;
+      background: #141417;
+      border: 1px solid #1C1C20;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .loading-spinner {
+      width: 48px;
+      height: 48px;
+      animation: rv-spin 1s linear infinite;
+    }
+    .loading-spinner svg { display: block; width: 48px; height: 48px; }
+
+    @keyframes rv-spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <div class="loading-spinner">
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="22" y="5" width="4" height="8" rx="2" fill="white"/>
+        <rect x="5" y="26" width="4" height="8" rx="2" transform="rotate(-90 5 26)" fill="#1C1C20"/>
+        <rect x="26" y="43" width="4" height="8" rx="2" transform="rotate(180 26 43)" fill="#1C1C20"/>
+        <rect x="43" y="22" width="4" height="8" rx="2" transform="rotate(90 43 22)" fill="#1C1C20"/>
+        <rect x="9.44531" y="12.2734" width="4" height="7.99788" rx="2" transform="rotate(-45 9.44531 12.2734)" fill="#1C1C20"/>
+        <rect x="12.2695" y="38.5586" width="4" height="8.00335" rx="2" transform="rotate(-135 12.2695 38.5586)" fill="#1C1C20"/>
+        <rect x="38.5532" y="35.7251" width="4" height="7.99592" rx="2" transform="rotate(135 38.5532 35.7251)" fill="#1C1C20"/>
+        <rect x="35.7285" y="9.44336" width="4" height="8.00068" rx="2" transform="rotate(45 35.7285 9.44336)" fill="#1C1C20"/>
+      </svg>
+    </div>
+  </div>
+
+  <script>
+    function navigateTo(url) {
+      window.location.href = url;
+    }
+
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    document.addEventListener('DOMContentLoaded', () => {
+      requestAnimationFrame(async () => {
+        document.body.classList.add('ready');
+        window.nativeReady?.().catch(() => {});
+        await new Promise(r => setTimeout(r, 250));
+        navigateTo('dashboard.html');
+      });
+    });
+  </script>
+</body>
+</html>

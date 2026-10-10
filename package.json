@@ -1,0 +1,60 @@
+{
+  "name": "energyutils-loader",
+  "version": "2.1.0",
+  "description": "EnergyUtils Launcher — by HB",
+  "author": "HB <hb@energystudio>",
+  "copyright": "Copyright © 2026 EnergyStudio",
+  "private": true,
+  "main": "electron/main.js",
+  "type": "module",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win portable --x64",
+    "dist:linux": "electron-builder --linux dir --x64"
+  },
+  "devDependencies": {
+    "@electron/fuses": "^2.1.3",
+    "electron": "^33.4.11",
+    "electron-builder": "^24.13.3",
+    "javascript-obfuscator": "^5.9.0"
+  },
+  "build": {
+    "appId": "com.energyutils.loader",
+    "productName": "EnergyUtils",
+    "afterPack": "./build/afterPack.cjs",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "ui/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "linux": {
+      "target": "dir",
+      "icon": "assets/icons/icon-512.png",
+      "category": "Game",
+      "executableName": "energyutils",
+      "artifactName": "energyutils-linux-x64",
+      "synopsis": "EnergyUtils Launcher",
+      "description": "Launcher for EnergyUtils Minecraft client"
+    },
+    "win": {
+      "legalTrademarks": "EnergyStudio",
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icons/app.ico"
+    },
+    "portable": {
+      "artifactName": "EnergyUtils.exe",
+      "requestExecutionLevel": "user"
+    }
+  }
+}

@@ -1,0 +1,88 @@
+name: Build Linux EnergyUtils
+
+on:
+  workflow_dispatch:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-22.04
+    env:
+      ELECTRON_VER: 33.4.11
+      NODE_MAJOR: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Base deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 \
+            xdg-utils libasound2t64 libgbm1 libglib2.0-0 || true
+          sudo apt-get install -y zip unzip tar jq curl wget || true
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_MAJOR }}
+      - name: node-gyp (global)
+        run: npm install -g node-gyp
+
+      - name: Build native module (eu_native.node for Electron)
+        run: |
+          cd cpp
+          python3 --version
+          node-gyp rebuild --target=${{ env.ELECTRON_VER }} --arch=x64 \
+            --dist-url=https://electronjs.org/headers
+          mkdir -p ../assets/native
+          cp build/Release/eu_native.node ../assets/native/eu_native.node
+          ls -la ../assets/native/
+
+      - name: Download Linux JRE 21 (Temurin) -> assets/java/HBJVM-L-linux.zip
+        run: |
+          mkdir -p assets/java
+          H_URL=$(curl -s https://api.adoptium.net/v3/assets/latest/21/hotspot \
+            | jq -r '.[] | select(.binary.os=="linux" and .binary.architecture=="x64" and .binary.image_type=="jre") | .binary.package.link' | head -n1)
+          echo "JRE URL: $H_URL"
+          curl -fL "$H_URL" -o assets/java/HBJVM-L-linux.zip
+          sha256sum assets/java/HBJVM-L-linux.zip
+          # Тестовое извлечение, чтобы поднять jdk-*/ на уровень и убедиться, что java есть
+          mkdir -p /tmp/hbjvm && tar -xf assets/java/HBJVM-L-linux.zip -C /tmp/hbjvm
+          find /tmp/hbjvm -maxdepth 2 -type f -name java | head
+          rm -rf /tmp/hbjvm
+
+      - name: Install app deps
+        run: |
+          npm install --no-audit --no-fund || true
+          npx electron --version || true
+
+      - name: Build AppImage (electron-builder, linux dir + AppImage)
+        run: |
+          npx electron-builder --linux AppImage --x64 || \
+          npx electron-builder --linux dir --x64
+
+      - name: Package extra files
+        run: |
+          mkdir -p release/extra
+          cp assets/native/eu_native.node release/extra/ 2>/dev/null || true
+          cp assets/java/HBJVM-L-linux.zip release/extra/ 2>/dev/null || true
+        continue-on-error: true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: energyutils-linux
+          path: release/
+
+      - name: Publish Release (tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.AppImage
+            release/*.tar.gz
+            release/extra/eu_native.node
+            release/extra/HBJVM-L-linux.zip
+          draft: true

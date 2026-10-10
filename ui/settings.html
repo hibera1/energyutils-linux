@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>EnergyUtils — Настройки</title>
+  <script src="../assets/scripts/rv-launcher-common.js" defer></script>
+  <script src="../assets/scripts/eu-i18n.js" defer></script>
+  <style>
+    @font-face {
+      font-family: 'Onest';
+      src: url('../assets/fonts/Onest-Regular.ttf') format('truetype');
+      font-weight: 400; font-style: normal;
+    }
+    @font-face {
+      font-family: 'Onest';
+      src: url('../assets/fonts/Onest-Medium.ttf') format('truetype');
+      font-weight: 500; font-style: normal;
+    }
+    @font-face {
+      font-family: 'Onest';
+      src: url('../assets/fonts/Onest-SemiBold.ttf') format('truetype');
+      font-weight: 600; font-style: normal;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    ::-webkit-scrollbar { display: none; }
+
+    html, body {
+      width: 1120px; height: 650px;
+      overflow: hidden;
+      background: #141417;
+      font-family: 'Onest', sans-serif;
+      user-select: none;
+    }
+
+    /* Only the content fades — titlebar and sidebar stay put. */
+    .main-content > *:not(.sidebar):not(.popup):not(.toast-error) {
+      opacity: 0;
+      transition: opacity 0.22s ease;
+    }
+    body.ready .main-content > *:not(.sidebar):not(.popup):not(.toast-error) {
+      opacity: 1;
+    }
+
+    /* ── App root ── */
+    .app {
+      width: 1120px; height: 650px;
+      padding: 20px 24px 24px 24px;
+      display: flex; flex-direction: column; gap: 18px;
+      background: #141417;
+      border: 1px solid #1C1C20;
+      box-shadow: 0 34px 58.4px #141417;
+      border-radius: 8px;
+    }
+
+    /* ── Titlebar (same as dashboard) ── */
+    .titlebar {
+      display: flex; flex-direction: row;
+      justify-content: space-between; align-items: center;
+      width: 100%; height: 24px; flex-shrink: 0;
+    }
+    .titlebar-left  { display: flex; align-items: center; gap: 24px; }
+    .titlebar-right { display: flex; align-items: center; gap: 24px; }
+
+    .logo { display: flex; align-items: center; gap: 8px; }
+    .logo-icon { width: 24px; height: 12px; display: flex; align-items: center; flex-shrink: 0; }
+    .logo-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .logo-text { font-weight: 500; font-size: 12px; color: #FFFFFF; }
+    .logo-down {
+      width: 12px; height: 12px; display: flex; align-items: center;
+      flex-shrink: 0; cursor: pointer;
+    }
+    .logo-down img { width: 100%; height: 100%; filter: brightness(0) invert(0.4); transition: filter 0.15s; }
+    .logo-down:hover img { filter: brightness(0) invert(1); }
+
+    .account-pill {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 8px; height: 24px;
+      background: #18181C; border-radius: 4px; cursor: pointer;
+    }
+    .pill-info { display: flex; align-items: center; gap: 4px; }
+    .pill-username { font-weight: 500; font-size: 13px; color: #D8D8D8; }
+    .pill-dot { width: 6px; height: 6px; background: #14CF7E; border-radius: 50%; flex-shrink: 0; }
+    .pill-down { width: 12px; height: 12px; display: flex; align-items: center; cursor: pointer; }
+    .pill-down img { width: 100%; height: 100%; filter: brightness(0) invert(0.4); transition: filter 0.15s; }
+    .pill-down:hover img { filter: brightness(0) invert(1); }
+
+    .window-controls { display: flex; align-items: center; gap: 8px; }
+    .btn-wc {
+      width: 24px; height: 24px;
+      display: flex; align-items: center; justify-content: center;
+      border: none; background: none; padding: 0; cursor: pointer;
+    }
+    .btn-wc img {
+      width: 100%; height: 100%; display: block;
+      filter: brightness(0) invert(0.4);
+      transition: filter 0.15s;
+    }
+    .btn-wc:hover img  { filter: brightness(0) invert(1); }
+    .btn-wc:active img { filter: brightness(0) invert(0.7); }
+
+    /* ── Main layout ── */
+    .main-content {
+      display: flex; flex-direction: row;
+      gap: 12px; flex: 1; min-height: 0;
+      position: relative;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 56px; flex-shrink: 0;
+      display: flex; flex-direction: column;
+      justify-content: space-between;
+      overflow: visible;
+      margin-left: -12px;
+    }
+    .nav-top { display: flex; flex-direction: column; gap: 4px; }
+
+    .nav-btn {
+      position: relative;
+      width: 56px; height: 56px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      border-radius: 12px; border: none; background: none;
+      padding: 12px 16px;
+      cursor: pointer;
+      overflow: hidden;
+      transition: padding 0.18s ease;
+    }
+    .nav-btn.active { background: #18181C; cursor: default; }
+    .nav-btn img {
+      width: 24px; height: 24px; display: block; flex-shrink: 0;
+      filter: brightness(0) invert(0.4);
+      transition: transform 0.18s ease, filter 0.18s ease;
+      position: relative; z-index: 1;
+    }
+    .nav-btn.active img {
+      filter: brightness(0) saturate(200%) invert(55%) sepia(90%)
+              saturate(800%) hue-rotate(230deg) brightness(105%);
+    }
+    .nav-label {
+      position: absolute; bottom: 8px;
+      left: 50%; transform: translateX(-50%) translateY(120%);
+      opacity: 0;
+      font-weight: 500; font-size: 11px; color: #656571;
+      white-space: nowrap;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      pointer-events: none; z-index: 0;
+    }
+    .nav-btn:not(.active):hover { padding: 8px 16px; }
+    .nav-btn:not(.active):hover img {
+      transform: translateY(-6px);
+      filter: brightness(0) invert(1);
+    }
+    .nav-btn:not(.active):hover .nav-label {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Quit button — slides left and turns red on hover, no label */
+    .nav-btn.nav-quit:hover { padding: 12px 16px; }
+    .nav-btn.nav-quit:hover img {
+      transform: translateX(-3px);
+      filter: brightness(0) saturate(100%) invert(56%) sepia(93%)
+              saturate(2605%) hue-rotate(324deg) brightness(104%) contrast(102%);
+    }
+
+    /* ── Settings content ── */
+    .settings-panel {
+      flex: 1; min-width: 0; min-height: 0;
+      display: flex; flex-direction: column;
+      padding: 24px 24px 0 24px;
+      gap: 20px;
+      overflow-y: auto;
+      /* запас под footer чтоб не прилипал к низу при скролле */
+      scrollbar-gutter: stable;
+    }
+    .settings-footer { margin-top: auto; margin-bottom: 60px; }
+
+    .settings-title {
+      font-weight: 600; font-size: 24px; line-height: 1;
+      color: #FFFFFF;
+      flex-shrink: 0;
+    }
+
+    .settings-section {
+      display: flex; flex-direction: column;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .settings-row {
+      display: flex; flex-direction: row;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .settings-row-between {
+      justify-content: space-between;
+    }
+    .section-label {
+      font-weight: 500; font-size: 16px; line-height: 20px;
+      color: #FFFFFF;
+    }
+    .section-desc {
+      font-weight: 500; font-size: 14px; line-height: 18px;
+      color: #656571;
+    }
+
+    /* Info block (label + description) */
+    .info-block {
+      display: flex; flex-direction: column;
+      gap: 12px;
+    }
+
+    /* ── Slider (RAM) ── */
+    .slider-group {
+      display: flex; flex-direction: column;
+      gap: 16px;
+      width: 100%;
+    }
+    /* ── RAM slider (continuous, 256 MB step, capped at system RAM) ── */
+    .ram-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 16px; width: 100%;
+    }
+    .ram-value {
+      font-weight: 500; font-size: 14px; line-height: 18px;
+      color: #FFFFFF;
+      flex-shrink: 0;
+    }
+    .ram-slider-wrap {
+      display: flex; flex-direction: column; gap: 8px; width: 100%;
+    }
+    .ram-track {
+      position: relative;
+      width: 100%; height: 8px;
+      background: #1C1C20;
+      border-radius: 16px;
+      cursor: pointer;
+    }
+    .ram-fill {
+      position: absolute;
+      left: 0; top: 0;
+      height: 100%;
+      background: #8b5cf6;
+      border-radius: 16px;
+      transition: width 0.1s ease;
+    }
+    .ram-thumb {
+      position: absolute;
+      top: 50%;
+      width: 14px; height: 14px;
+      background: #FFFFFF;
+      border-radius: 50%;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      transform: translate(-50%, -50%);
+      transition: left 0.1s ease;
+      pointer-events: none;
+    }
+    .ram-edges {
+      display: flex; justify-content: space-between;
+      font-weight: 400; font-size: 12px; line-height: 15px;
+      color: #656571;
+    }
+    .lang-card.active:hover .lang-name { color: #FFFFFF; }
+
+    /* ── Path field + button ── */
+    .path-row {
+      display: flex; flex-direction: row;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+    }
+    .path-field {
+      flex: 1; min-width: 0;
+      display: flex; align-items: center;
+      padding: 16px;
+      height: 48px;
+      background: #151517;
+      border: 1px solid #1C1C20;
+      border-radius: 16px;
+      font-weight: 500; font-size: 14px; line-height: 18px;
+      color: #FFFFFF;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .path-btn {
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      padding: 12px 16px; gap: 8px;
+      height: 48px;
+      background: #18181C;
+      border: 1px solid #1C1C20;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: 'Onest', sans-serif;
+      font-weight: 500; font-size: 12px; line-height: 15px;
+      color: #FFFFFF;
+      white-space: nowrap;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .path-btn:hover {
+      background: #8b5cf6;
+      border-color: transparent;
+      box-shadow: 0 5px 16px rgba(139, 92, 246, 0.34);
+    }
+
+    /* ── Footer ── */
+    .settings-footer {
+      display: flex; flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      gap: 24px;
+      width: 100%;
+      flex-shrink: 0;
+    }
+    .footer-meta {
+      font-weight: 500; font-size: 10px; line-height: 13px;
+      color: #656571;
+      opacity: 0.3;
+    }
+
+    /* ── Popups (same as dashboard) ── */
+    .popup {
+      position: absolute;
+      display: flex; flex-direction: column;
+      align-items: stretch;
+      padding: 12px; gap: 8px;
+      background: #151517;
+      border: 1px solid #1C1C20;
+      box-shadow: 0 34px 58.4px #141417;
+      border-radius: 8px;
+      z-index: 100;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.18s ease, visibility 0s linear 0.18s;
+    }
+    .popup.visible {
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 0.18s ease, visibility 0s linear 0s;
+    }
+    .popup-client { width: 234px; top: 56px; left: 24px; }
+    .popup-account { width: 167px; top: 56px; right: 80px; }
+
+    .popup-item {
+      display: flex; flex-direction: row; align-items: center;
+      padding: 8px; gap: 8px;
+      border-radius: 4px; cursor: pointer;
+      transition: background 0.12s;
+    }
+    .popup-item:hover { background: #18181C; }
+    .popup-item-icon { width: 16px; height: 16px; flex-shrink: 0; }
+    .popup-item-icon img {
+      width: 100%; height: 100%;
+      filter: brightness(0) invert(0.4);
+      transition: filter 0.12s;
+    }
+    .popup-item:hover .popup-item-icon img { filter: brightness(0) invert(0.85); }
+    .popup-item-product { cursor: default; opacity: 0.55; }
+    .popup-item-product:hover { background: transparent; }
+    .popup-item.popup-item-product .popup-item-icon img { filter: none; }
+    .popup-item-label {
+      flex: 1;
+      font-weight: 500; font-size: 13px; color: #D8D8D8;
+    }
+    .popup-divider { height: 1px; width: 100%; background: #656571; opacity: 0.2; }
+
+    /* Quit confirmation popup — anchored next to the quit button */
+    .popup-quit {
+      width: 234px;
+      bottom: 0;
+      left: 68px;
+      padding: 16px;
+      gap: 16px;
+    }
+    .popup-quit-header {
+      display: flex; align-items: center;
+      gap: 8px; width: 100%;
+    }
+    .popup-quit-icon { width: 16px; height: 16px; flex-shrink: 0; }
+    .popup-quit-icon img {
+      width: 100%; height: 100%;
+      filter: brightness(0) saturate(100%) invert(56%) sepia(93%)
+              saturate(2605%) hue-rotate(324deg) brightness(104%) contrast(102%);
+    }
+    .popup-quit-title {
+      font-weight: 500; font-size: 15px; line-height: 19px;
+      color: #FFFFFF;
+    }
+    .popup-quit-desc {
+      font-weight: 500; font-size: 13px; line-height: 17px;
+      color: #656571;
+      width: 100%;
+    }
+    .popup-quit-actions {
+      display: flex; flex-direction: row;
+      gap: 8px; width: 100%;
+    }
+    .popup-quit-actions button {
+      padding: 8px 12px;
+      height: 33px;
+      border: none; background: transparent;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: 'Onest', sans-serif;
+      font-weight: 500; font-size: 13px; line-height: 17px;
+      color: #D8D8D8;
+      transition: background 0.12s ease, color 0.12s ease;
+    }
+    .popup-quit-confirm { flex: 1; }
+    .popup-quit-confirm:hover { background: #1C1C20; color: #FF6363; }
+    .popup-quit-cancel  { flex-shrink: 0; }
+    .popup-quit-cancel:hover { background: #18181C; color: #FFFFFF; }
+
+    /* ── Toast (error variant) ── */
+    .toast-error {
+      position: absolute;
+      right: 0; bottom: 0;
+      width: 300px;
+      display: flex; flex-direction: column;
+      padding: 16px; gap: 16px;
+      background: #151517;
+      border: 1px solid #1C1C20;
+      box-shadow: 0 34px 58.4px #141417;
+      border-radius: 8px;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      pointer-events: none;
+      z-index: 200;
+    }
+    .toast-error.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+    /* Toggle switch (dev console). Figma was 29x16; scaled ~1.7× for usability. */
+    .toggle { position: relative; display: inline-block; width: 48px; height: 26px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; cursor: pointer; inset: 0;
+      background: #1C1C20;
+      border-radius: 64px;
+      transition: background 0.18s, box-shadow 0.18s;
+    }
+    .toggle-slider::before {
+      content: ''; position: absolute;
+      width: 20px; height: 20px;
+      left: 3px; top: 50%;
+      transform: translateY(-50%);
+      background: #D8D8D8;
+      border-radius: 64px;
+      transition: transform 0.18s, background 0.18s;
+    }
+    .toggle input:checked + .toggle-slider {
+      background: #8b5cf6;
+      box-shadow: 0 5px 16px rgba(139, 92, 246, 0.34);
+    }
+    .toggle input:checked + .toggle-slider::before {
+      transform: translate(22px, -50%);
+      background: #FFFFFF;
+    }
+    .toast-error-text  { display: flex; flex-direction: column; gap: 8px; }
+    .toast-error-header { display: flex; align-items: center; gap: 8px; }
+    .toast-error-icon   { width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    .toast-error-title  { font-weight: 500; font-size: 13px; line-height: 17px; color: #FFFFFF; flex: 1; }
+    .toast-error-body   {
+      padding-left: 24px;
+      font-weight: 500; font-size: 11px; line-height: 14px; color: #656571;
+    }
+    .toast-error-track {
+      width: 100%; height: 16px;
+      background: #1C1C20;
+      border: 1px solid rgba(101, 101, 113, 0.1);
+      border-radius: 16px;
+      padding: 4px;
+    }
+    .toast-error-bar {
+      height: 8px; width: 100%; border-radius: 16px;
+      background: #FF6363;
+      box-shadow: 0 4px 4px #141417;
+      transition: width 4s linear;
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+
+    <!-- Titlebar -->
+    <div class="titlebar">
+      <div class="titlebar-left">
+        <div class="logo">
+          <div class="logo-icon">
+            <img src="../assets/icons/logo.svg" alt="">
+          </div>
+          <span class="logo-text">EnergyUtils</span>
+          <div class="logo-down">
+            <img src="../assets/icons/down.svg" alt="">
+          </div>
+        </div>
+      </div>
+      <div class="titlebar-right">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div class="account-pill" id="account-pill">
+            <div class="pill-info">
+              <span class="pill-username"></span><script>(function(){var c=window.__rvCache;if(!c){try{c=JSON.parse(localStorage.getItem('rv_user')||'null');}catch(_){}}if(c&&c.username)document.currentScript.previousElementSibling.textContent=c.username;})();</script>
+              <div class="pill-dot"></div>
+            </div>
+            <div class="pill-down">
+              <img src="../assets/icons/down.svg" alt="">
+            </div>
+          </div>
+        </div>
+        <div class="window-controls">
+          <button class="btn-wc" id="btn-hide"><img src="../assets/icons/hide.svg" alt=""></button>
+          <button class="btn-wc" id="btn-close"><img src="../assets/icons/close.svg" alt=""></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main -->
+    <div class="main-content">
+
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="nav-top">
+          <button class="nav-btn" onclick="navigateTo('dashboard.html')">
+            <img src="../assets/icons/home.svg" alt="">
+            <span class="nav-label">Главная</span>
+          </button>
+          <button class="nav-btn" onclick="navigateTo('versions.html')">
+            <img src="../assets/icons/puzzle.svg" alt="">
+            <span class="nav-label">Версии</span>
+          </button>
+          <button class="nav-btn" onclick="navigateTo('mods.html')">
+            <img src="../assets/icons/import.svg" alt="">
+            <span class="nav-label">Моды</span>
+          </button>
+          <button class="nav-btn" onclick="navigateTo('accounts.html')">
+            <img src="../assets/icons/person.png" alt="">
+            <span class="nav-label">Аккаунты</span>
+          </button>
+          <button class="nav-btn active">
+            <img src="../assets/icons/settings.svg" alt="">
+            <span class="nav-label">Настройки</span>
+          </button>
+        </div>
+        <button class="nav-btn nav-quit" id="btn-quit">
+          <img src="../assets/icons/quit.svg" alt="">
+        </button>
+      </div>
+
+      <!-- Quit confirmation popup — anchored next to the quit button -->
+      <div class="popup popup-quit" id="popup-quit">
+        <div class="popup-quit-header">
+          <div class="popup-quit-icon"><img src="../assets/icons/quit.svg" alt=""></div>
+          <span class="popup-quit-title">Выход</span>
+        </div>
+        <p class="popup-quit-desc">Закрыть EnergyUtils?</p>
+        <div class="popup-quit-actions">
+          <button class="popup-quit-confirm" id="quit-confirm">Подтверждаю</button>
+          <button class="popup-quit-cancel"  id="quit-cancel">Остаться</button>
+        </div>
+      </div>
+
+      <!-- Settings content -->
+      <div class="settings-panel">
+
+        <h1 class="settings-title">Настройки</h1>
+
+        <!-- RAM allocation (continuous slider, capped at system RAM) -->
+        <div class="settings-section" id="ram-section">
+          <div class="ram-header">
+            <div class="info-block">
+              <span class="section-label">Выделение ОЗУ</span>
+              <span class="section-desc">Объём памяти для игры. Рекомендуется оставить запас системе.</span>
+            </div>
+            <span class="ram-value" id="ram-value">4 GB</span>
+          </div>
+          <div class="ram-slider-wrap">
+            <div class="ram-track" id="ram-track">
+              <div class="ram-fill" id="ram-fill"></div>
+              <div class="ram-thumb" id="ram-thumb"></div>
+            </div>
+            <div class="ram-edges">
+              <span id="ram-min-label">512 MB</span>
+              <span id="ram-max-label">16 GB</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-row settings-row-between">
+          <div class="info-block">
+            <span class="section-label">Папка с модами</span>
+            <span class="section-desc">Сюда кидай свои моды — они автоматически подхватятся при следующем запуске.</span>
+          </div>
+          <button class="path-btn" id="mods-btn">Открыть</button>
+        </div>
+
+        <div class="settings-row settings-row-between">
+          <div class="info-block">
+            <span class="section-label">Консоль разработчика</span>
+            <span class="section-desc">Логи запуска, последний кик (crash-report) и логи майна за 15 дней.</span>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="dev-console-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="dev-tools-panel" id="dev-tools-panel" style="display:none; flex-direction:column; gap:10px; width:100%;">
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="path-btn" id="dev-reload-btn">Обновить</button>
+            <button class="path-btn" id="dev-logs-btn">Папка логов</button>
+            <button class="path-btn" id="dev-crash-btn">Краши</button>
+          </div>
+          <div id="dev-kick-box" style="background:#141417; border:1px solid #1C1C20; border-radius:10px; padding:10px 12px; font:11px/1.5 Consolas,monospace; color:#FF9C9C; max-height:140px; overflow:auto; white-space:pre-wrap;"></div>
+          <textarea id="dev-console-text" readonly spellcheck="false" style="width:100%; height:230px; resize:none; background:#101014; border:1px solid #1C1C20; border-radius:10px; color:#B8C7D9; font:11px/1.5 Consolas,monospace; padding:10px 12px; box-sizing:border-box;"></textarea>
+        </div>
+
+        <div class="settings-row settings-row-between">
+          <div class="info-block">
+            <span class="section-label">Быстрый запуск</span>
+            <span class="section-desc">Строка с серверами на дашборде для запуска игры одним кликом.</span>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="quick-launch-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="settings-row settings-row-between">
+          <div class="info-block">
+            <span class="section-label">Сбросить настройки игры</span>
+            <span class="section-desc">Вернёт options.txt к стандарту (GUI scale 2, VSync выкл., FPS без лимита). Полезно, если игра тормозит или картинка сломалась — все лаунчер-настройки сохранятся.</span>
+          </div>
+          <button class="path-btn" id="reset-options-btn">Сбросить</button>
+        </div>
+
+        <div class="settings-row settings-row-between">
+          <div class="info-block">
+            <span class="section-label">Папка со скриншотами</span>
+            <span class="section-desc">Открыть папку, куда Minecraft сохраняет скриншоты (F2 в игре).</span>
+          </div>
+          <button class="path-btn" id="shots-btn">Открыть</button>
+        </div>
+
+        <div class="settings-row settings-row-between">
+          <div class="info-block">
+            <span class="section-label">Проверить целостность</span>
+            <span class="section-desc">Сверка ключевых файлов установки (клиент, мод, Java, библиотеки).</span>
+          </div>
+          <button class="path-btn" id="verify-btn">Проверить</button>
+        </div>
+
+        <div class="settings-row settings-row-between">
+          <div class="info-block">
+            <span class="section-label">Диагностический пакет</span>
+            <span class="section-desc">Соберёт логи, версии и инфо о системе в один zip — удобно для поддержки.</span>
+          </div>
+          <button class="path-btn" id="diag-btn">Собрать</button>
+        </div>
+
+        <div class="settings-row settings-row-between">
+          <div class="info-block">
+            <span class="section-label">Авто-память</span>
+            <span class="section-desc">Выделить оптимальный объём RAM под эту систему.</span>
+          </div>
+          <button class="path-btn" id="ram-auto-btn">Авто-RAM</button>
+        </div>
+
+        <div class="settings-row settings-row-between">
+          <div class="info-block">
+            <span class="section-label">Язык интерфейса</span>
+            <span class="section-desc">Русский / English (применится после перезапуска страницы).</span>
+          </div>
+          <select id="lang-select" style="background:#141417;border:1px solid #1C1C20;border-radius:8px;color:#fff;padding:6px 10px;font-size:13px;">
+            <option value="ru">Русский</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+
+        <!-- Footer -->
+        <div class="settings-footer">
+          <span class="footer-meta js-rv-client-version">Client Version: <span class="rv-skel" style="display:inline-block;width:40px;height:9px;vertical-align:middle;"></span></span>
+          <span class="footer-meta">© EnergyUtils 2026</span>
+        </div>
+
+      </div>
+
+      <!-- Error toast (shown on demand, e.g. path change fails) -->
+      <div class="toast-error" id="toast-error">
+        <div class="toast-error-text">
+          <div class="toast-error-header">
+            <div class="toast-error-icon">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M8 1.333A6.667 6.667 0 1 1 1.333 8 6.674 6.674 0 0 1 8 1.333Zm0 1.334A5.333 5.333 0 1 0 13.333 8 5.34 5.34 0 0 0 8 2.667Zm0 2a.667.667 0 0 1 .667.666v3.334a.667.667 0 0 1-1.334 0V5.333A.667.667 0 0 1 8 4.667Zm0 6a.833.833 0 1 1 0 1.666.833.833 0 0 1 0-1.666Z" fill="#FF6363"/>
+              </svg>
+            </div>
+            <span class="toast-error-title">Что-то пошло не так</span>
+          </div>
+          <div class="toast-error-body">
+            Не удалось применить изменения. Проверь права доступа к папке или попробуй еще раз.
+          </div>
+        </div>
+        <div class="toast-error-track">
+          <div class="toast-error-bar" id="toast-error-bar"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Popups -->
+    <div class="popup popup-client" id="popup-client">
+
+      <div class="popup-divider"></div>
+      <div class="popup-item" data-action="check-update"><div class="popup-item-icon"><img src="../assets/icons/update.svg" alt=""></div><span class="popup-item-label">Проверка обновлений</span></div>
+      <div class="popup-divider"></div>
+      <div class="popup-item" data-action="open-folder"><div class="popup-item-icon"><img src="../assets/icons/folder.svg" alt=""></div><span class="popup-item-label">Открыть папку</span></div>
+      <div class="popup-item" data-action="open-mods"><div class="popup-item-icon"><img src="../assets/icons/folder.svg" alt=""></div><span class="popup-item-label">Папка с модами</span></div>
+      <div class="popup-divider"></div>
+      <div class="popup-item" data-url="https://help.energyutils.me/"><div class="popup-item-icon"><img src="../assets/icons/link.svg" alt=""></div><span class="popup-item-label">Поддержка</span></div>
+      <div class="popup-item" data-url="https://discord.gg/A6RdtUr2pk"><div class="popup-item-icon"><img src="../assets/icons/link.svg" alt=""></div><span class="popup-item-label">Discord</span></div>
+      <div class="popup-item" data-url="https://t.me/energyutils"><div class="popup-item-icon"><img src="../assets/icons/link.svg" alt=""></div><span class="popup-item-label">Telegram</span></div>
+      <div class="popup-item" data-url="https://energyutils.me"><div class="popup-item-icon"><img src="../assets/icons/link.svg" alt=""></div><span class="popup-item-label">Сайт</span></div>
+      <div class="popup-item" data-url="https://energyutils.me/faq"><div class="popup-item-icon"><img src="../assets/icons/link.svg" alt=""></div><span class="popup-item-label">FAQ</span></div>
+      <div class="popup-divider"></div>
+      <div class="popup-item" data-nav="settings.html"><div class="popup-item-icon"><img src="../assets/icons/settings.svg" alt=""></div><span class="popup-item-label">Настройки</span></div>
+    </div>
+    <div class="popup popup-account" id="popup-account">
+      <div class="popup-item"><div class="popup-item-icon"><img src="../assets/icons/quit.svg" alt=""></div><span class="popup-item-label">Выйти</span></div>
+    </div>
+
+  </div>
+
+  <script>
+    // ── Page transitions ─────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', () => {
+      requestAnimationFrame(() => {
+        document.body.classList.add('ready');
+        window.nativeReady?.().catch(() => {});
+      });
+      hydrateSettings();
+      hydratePillUsername();
+    });
+
+    function applyUserToPill(u) {
+      if (!u) return;
+      const nameEl   = document.querySelector('#account-pill .pill-username');
+      const avatarEl = document.querySelector('#account-pill .avatar-sm');
+      if (nameEl && u.username) nameEl.textContent = u.username;
+      const avatarSrc = u.avatarDataUrl || u.avatarUrl;
+      if (avatarEl && avatarSrc) avatarEl.src = avatarSrc;
+    }
+
+    try {
+      const cached = JSON.parse(localStorage.getItem('rv_user') || 'null');
+      if (cached) applyUserToPill(cached);
+    } catch (_) {}
+
+    async function hydratePillUsername() {
+      try {
+        const s = await window.nativeAuthState?.();
+        const u = s?.user;
+        if (!u) return;
+        try { localStorage.setItem('rv_user', JSON.stringify(u)); } catch (_) {}
+        applyUserToPill(u);
+      } catch (_) {}
+    }
+
+    async function hydrateSettings() {
+      // Probe physical RAM first — caps the slider's max.
+      try {
+        const sysRam = parseInt(await window.nativeGetSystemRam?.(), 10);
+        if (Number.isFinite(sysRam) && sysRam >= 1024) RAM_MAX = sysRam;
+      } catch (_) {}
+      ramMaxLbl.textContent = formatRam(RAM_MAX);
+
+      let s = null;
+      try { s = await window.nativeGetSettings?.(); } catch (_) {}
+
+      // Pick saved value, otherwise default to half of system RAM clamped
+      // [2 GB, 6 GB] (mirrors pulse's ram_slider default heuristic).
+      let chosen = (s && typeof s.ram === 'number') ? s.ram : 0;
+      if (!chosen) {
+        const half = Math.floor(RAM_MAX / 2 / 1024) * 1024;
+        chosen = Math.min(RAM_MAX, Math.max(2048, Math.min(6144, half)));
+      }
+      ramMb = snapMb(chosen);
+      requestAnimationFrame(renderRam);
+    }
+    function navigateTo(url) {
+      window.location.href = url;
+    }
+
+    // ── Window controls ──
+    document.getElementById('btn-hide').addEventListener('click', () => { window.nativeHide?.().catch(() => {}); });
+    document.getElementById('btn-close').addEventListener('click', () => { window.nativeClose?.().catch(() => {}); });
+
+    // ── Drag (top 44px strip) ──
+    // .titlebar visually sits at y=20..44 (after .app's 20px top padding) so a
+    // click in the topmost 20 pixels would otherwise miss the drag handler.
+    // Listen on body and gate by clientY < 44 so the entire top edge grabs.
+    const NODRAG = '#btn-hide,#btn-close,.account-pill,.logo-down,.popup';
+    document.body.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      if (e.clientY > 44) return;
+      if (e.target.closest(NODRAG)) return;
+      window.nativeDragMove?.().catch(() => {});
+    });
+
+    // ── Block right-click context menu ──
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+
+    // ── Account pill ──
+    const accountPill = document.getElementById('account-pill');
+    const pillDown    = accountPill.querySelector('.pill-down');
+
+    // ── Popups ──
+    const popupClient  = document.getElementById('popup-client');
+    const popupAccount = document.getElementById('popup-account');
+    const popupQuit    = document.getElementById('popup-quit');
+    const logoDown     = document.querySelector('.logo-down');
+    const btnQuit      = document.getElementById('btn-quit');
+
+    function closeAllPopups() {
+      popupClient.classList.remove('visible');
+      popupAccount.classList.remove('visible');
+      popupQuit.classList.remove('visible');
+    }
+    logoDown.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const wasOpen = popupClient.classList.contains('visible');
+      closeAllPopups();
+      if (!wasOpen) popupClient.classList.add('visible');
+    });
+    popupClient.addEventListener('click', (e) => {
+      const item = e.target.closest('.popup-item');
+      if (!item) return;
+      e.stopPropagation();
+      closeAllPopups();
+      if (item.dataset.url) {
+        window.nativeOpenUrl?.(item.dataset.url).catch(() => {});
+      } else if (item.dataset.nav) {
+        navigateTo(item.dataset.nav);
+      } else if (item.dataset.action === 'open-folder') {
+        window.nativeOpenFolder?.('').catch(() => {});
+      } else if (item.dataset.action === 'open-mods') {
+        window.nativeOpenUserMods?.().catch(() => {});
+      } else if (item.dataset.action === 'check-update') {
+        navigateTo('dashboard.html');
+      }
+    });
+    pillDown.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const wasOpen = popupAccount.classList.contains('visible');
+      closeAllPopups();
+      if (!wasOpen) popupAccount.classList.add('visible');
+    });
+    btnQuit.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const wasOpen = popupQuit.classList.contains('visible');
+      closeAllPopups();
+      if (!wasOpen) popupQuit.classList.add('visible');
+    });
+    document.getElementById('quit-confirm').addEventListener('click', () => {
+      popupQuit.classList.remove('visible');
+      window.nativeClose?.().catch(() => {});
+    });
+    document.getElementById('quit-cancel').addEventListener('click', () => {
+      popupQuit.classList.remove('visible');
+    });
+    document.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.popup')) return;
+      if (e.target.closest('.logo-down') ||
+          e.target.closest('.pill-down') ||
+          e.target.closest('#btn-quit')) return;
+      closeAllPopups();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeAllPopups();
+    });
+
+    // ── RAM slider — continuous, 256 MB step, max = physical system RAM ──
+    const ramTrack  = document.getElementById('ram-track');
+    const ramFill   = document.getElementById('ram-fill');
+    const ramThumb  = document.getElementById('ram-thumb');
+    const ramValue  = document.getElementById('ram-value');
+    const ramMaxLbl = document.getElementById('ram-max-label');
+    const RAM_STEP  = 256;
+    let RAM_MIN = 512;
+    let RAM_MAX = 16384; // overwritten by nativeGetSystemRam()
+    let ramMb = 4096;
+
+    function formatRam(mb) {
+      if (mb % 1024 === 0) return (mb / 1024) + ' GB';
+      return (mb / 1024).toFixed(1).replace(/\.0$/, '') + ' GB';
+    }
+
+    function renderRam() {
+      const ratio = (ramMb - RAM_MIN) / Math.max(1, RAM_MAX - RAM_MIN);
+      const w = Math.max(0, Math.min(1, ratio)) * 100;
+      ramFill.style.width = w + '%';
+      ramThumb.style.left = w + '%';
+      ramValue.textContent = formatRam(ramMb);
+    }
+
+    function snapMb(mb) {
+      mb = Math.round(mb / RAM_STEP) * RAM_STEP;
+      return Math.max(RAM_MIN, Math.min(RAM_MAX, mb));
+    }
+
+    function ramFromClientX(clientX) {
+      const rect = ramTrack.getBoundingClientRect();
+      const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+      return snapMb(RAM_MIN + ratio * (RAM_MAX - RAM_MIN));
+    }
+
+    function commitRam(mb) {
+      ramMb = mb;
+      renderRam();
+      window.nativeSetRam?.(mb).catch(() => {});
+    }
+
+    ramTrack.addEventListener('click', (e) => commitRam(ramFromClientX(e.clientX)));
+
+    let draggingRam = false;
+    ramTrack.addEventListener('mousedown', (e) => {
+      draggingRam = true;
+      ramMb = ramFromClientX(e.clientX);
+      renderRam();
+    });
+    window.addEventListener('mouseup', () => {
+      if (draggingRam) {
+        window.nativeSetRam?.(ramMb).catch(() => {});
+        draggingRam = false;
+      }
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!draggingRam) return;
+      ramMb = ramFromClientX(e.clientX);
+      renderRam();
+    });
+
+
+    // ── Path button — demo error toast ──
+    const toastError = document.getElementById('toast-error');
+    const toastErrorBar = document.getElementById('toast-error-bar');
+    let toastTimer = null;
+
+    function showErrorToast() {
+      clearTimeout(toastTimer);
+      toastError.classList.remove('visible');
+      toastErrorBar.style.transition = 'none';
+      toastErrorBar.style.width = '100%';
+
+      requestAnimationFrame(() => {
+        toastError.classList.add('visible');
+        requestAnimationFrame(() => {
+          toastErrorBar.style.transition = 'width 4s linear';
+          toastErrorBar.style.width = '0%';
+        });
+        toastTimer = setTimeout(() => {
+          toastError.classList.remove('visible');
+        }, 4000);
+      });
+    }
+
+    // "Открыть папку с модами"
+    document.getElementById('mods-btn').addEventListener('click', () => {
+      window.nativeOpenUserMods?.().catch(() => {});
+    });
+
+    // ── Dev console toggle + панель логов ──
+    const devToggle = document.getElementById('dev-console-toggle');
+    const devPanel = document.getElementById('dev-tools-panel');
+    const devKick = document.getElementById('dev-kick-box');
+    const devText = document.getElementById('dev-console-text');
+
+    async function loadDevTools() {
+      if (!devPanel || devPanel.style.display === 'none') return;
+      try {
+        const info = await window.nativeGetDevToolsInfo?.();
+        if (!info) return;
+        if (info.lastKick) {
+          devKick.textContent = '💥 ' + info.lastKick.file + '\n' + info.lastKick.preview;
+        } else {
+          devKick.textContent = 'Киков (crash) не найдено — всё чисто.';
+        }
+        let log = info.consoleLog || 'Консоль пуста (игра ещё не запускалась).';
+        // Хвост последней сессии
+        const tail = log.split(/\n/).slice(-400);
+        devText.value = tail.join('\n');
+        devText.scrollTop = devText.scrollHeight;
+      } catch (_) {}
+    }
+
+    (async () => {
+      try { devToggle.checked = (await window.nativeGetDevConsole?.()) === true; } catch (_) {}
+      if (devPanel && devToggle.checked) {
+        devPanel.style.display = 'flex';
+        loadDevTools();
+      }
+    })();
+    devToggle.addEventListener('change', async () => {
+      window.nativeSetDevConsole?.(devToggle.checked).catch(() => {});
+      if (devPanel) {
+        devPanel.style.display = devToggle.checked ? 'flex' : 'none';
+        if (devToggle.checked) loadDevTools();
+      }
+    });
+
+    const devReload = document.getElementById('dev-reload-btn');
+    if (devReload) devReload.addEventListener('click', () => loadDevTools());
+    const devLogs = document.getElementById('dev-logs-btn');
+    if (devLogs) devLogs.addEventListener('click', () => window.nativeOpenLogsFolder?.().catch(() => {}));
+    const devCrash = document.getElementById('dev-crash-btn');
+    if (devCrash) devCrash.addEventListener('click', () => window.nativeOpenCrashFolder?.().catch(() => {}));
+
+    // ── Сброс настроек игры (options.txt) ──
+    const resetOptsBtn = document.getElementById('reset-options-btn');
+    if (resetOptsBtn) {
+      resetOptsBtn.addEventListener('click', async () => {
+        if (!confirm('Сбросить настройки игры (options.txt) к стандартным?\nЛаунчер и аккаунты не тронутся.')) return;
+        try {
+          const r = await window.nativeResetGameOptions?.();
+          if (r && r.ok) alert('Настройки игры сброшены. Они применятся при следующем запуске Minecraft.');
+          else alert('Не удалось сбросить: ' + ((r && r.error) || 'ошибка'));
+        } catch (_) {
+          alert('Не удалось сбросить настройки.');
+        }
+      });
+    }
+
+    // ── #3: папка скриншотов ──
+    const shotsBtn = document.getElementById('shots-btn');
+    if (shotsBtn) shotsBtn.addEventListener('click', () => window.nativeOpenScreenshots?.().catch(() => {}));
+
+    // ── #23: проверка целостности ──
+    const verifyBtn = document.getElementById('verify-btn');
+    if (verifyBtn) {
+      verifyBtn.addEventListener('click', async () => {
+        verifyBtn.disabled = true;
+        const orig = verifyBtn.textContent;
+        verifyBtn.textContent = 'Проверяю...';
+        try {
+          const r = await window.nativeVerifyClient?.();
+          if (!r || !r.ok) { alert('Не удалось проверить: ' + ((r && r.error) || 'ошибка')); return; }
+          const lines = r.checks.map((c) => '• ' + c.name + ' — ' + ({ ok: 'ОК', missing: 'нет', empty: 'пустой', error: 'ошибка' }[c.status] || c.status));
+          alert(lines.join('\n') + (r.allOk ? '\n\nВсё на месте ✓' : '\n\nЕсть проблемы!'));
+        } finally {
+          verifyBtn.disabled = false;
+          verifyBtn.textContent = orig;
+        }
+      });
+    }
+
+    // ── #25: диагностический пакет ──
+    const diagBtn = document.getElementById('diag-btn');
+    if (diagBtn) {
+      diagBtn.addEventListener('click', async () => {
+        diagBtn.disabled = true;
+        const orig = diagBtn.textContent;
+        diagBtn.textContent = 'Собираю...';
+        try {
+          const r = await window.nativeExportDiag?.();
+          if (r && r.ok) alert('Диагностический пакет сохранён:\n' + r.path);
+          else alert('Не удалось собрать: ' + ((r && r.error) || 'ошибка'));
+        } finally {
+          diagBtn.disabled = false;
+          diagBtn.textContent = orig;
+        }
+      });
+    }
+
+    // ── #29: авто-RAM (после выбора слайдер обязан переехать) ──
+    const ramAutoBtn = document.getElementById('ram-auto-btn');
+    if (ramAutoBtn) {
+      ramAutoBtn.addEventListener('click', async () => {
+        try {
+          const r = await window.nativeRecommendRam?.();
+          if (r && r.ok) {
+            ramMb = Math.max(RAM_MIN, Math.min(RAM_MAX, Math.round(r.ram * 1024)));
+            renderRam();
+            window.nativeSetRam?.(ramMb).catch(() => {});
+            alert('Установлено ' + formatRam(ramMb) + '. Применится при следующем запуске игры.');
+          } else {
+            alert('Не удалось подобрать память.');
+          }
+        } catch (_) { alert('Ошибка'); }
+      });
+    }
+
+    // ── #28: показать RAM-инфо при загрузке ──
+    (async () => {
+      try {
+        const r = await window.nativeGetRamCheck?.();
+        if (r && r.ok && r.lowWarn) {
+          const ramDesc = document.querySelector('#ram-section .section-desc');
+          if (ramDesc) ramDesc.textContent = 'Внимание: свободно всего ' + r.freeGB + ' ГБ. Рекомендуем поставить не больше ' + r.recommended + ' ГБ.';
+        }
+      } catch (_) {}
+    })();
+
+    // ── #34: язык ──
+    const langSelect = document.getElementById('lang-select');
+    if (langSelect) {
+      (async () => {
+        try {
+          const cur = await window.euLang();
+          langSelect.value = cur;
+        } catch (_) {}
+      })();
+      langSelect.addEventListener('change', () => {
+        window.euSetLang?.(langSelect.value === 'en' ? 'en' : 'ru');
+        if (typeof window.euApplyLang === 'function') window.euApplyLang(langSelect.value === 'en' ? 'en' : 'ru');
+      });
+    }
+
+    // ── Quick launch toggle (показ/скрытие строки серверов на дашборде) ──
+    const quickLaunchToggle = document.getElementById('quick-launch-toggle');
+    (async () => {
+      try {
+        // default = true (показывать), если ничего не сохранено
+        const raw = await window.nativeGetShowQuickLaunch?.();
+        quickLaunchToggle.checked = raw === undefined ? true : raw === true;
+      } catch (_) { quickLaunchToggle.checked = true; }
+    })();
+    quickLaunchToggle.addEventListener('change', () => {
+      window.nativeSetShowQuickLaunch?.(quickLaunchToggle.checked).catch(() => {});
+    });
+  </script>
+</body>
+</html>

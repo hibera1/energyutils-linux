@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>EnergyUtils — Моды</title>
+  <script src="../assets/scripts/rv-launcher-common.js" defer></script>
+  <script src="../assets/scripts/eu-i18n.js" defer></script>
+  <style>
+    @font-face { font-family:'Onest'; src:url('../assets/fonts/Onest-Regular.ttf') format('truetype'); font-weight:400; }
+    @font-face { font-family:'Onest'; src:url('../assets/fonts/Onest-Medium.ttf')  format('truetype'); font-weight:500; }
+    @font-face { font-family:'Onest'; src:url('../assets/fonts/Onest-SemiBold.ttf') format('truetype'); font-weight:600; }
+
+    *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+    ::-webkit-scrollbar { display:none; }
+    html,body { width:1120px; height:650px; overflow:hidden; background:#141417; font-family:'Onest',sans-serif; user-select:none; }
+    .main-content > *:not(.sidebar):not(.popup) { opacity:0; transition: opacity .22s ease; }
+    body.ready .main-content > *:not(.sidebar):not(.popup) { opacity:1; }
+
+    .app { width:1120px; height:650px; padding:20px 24px 24px 24px; display:flex; flex-direction:column; gap:18px;
+           background:#141417; border:1px solid #1C1C20; box-shadow:0 34px 58.4px #141417; border-radius:8px; }
+
+    /* ── Titlebar (shared with other pages) ── */
+    .titlebar { display:flex; flex-direction:row; justify-content:space-between; align-items:center; width:100%; height:24px; flex-shrink:0; }
+    .titlebar-left, .titlebar-right { display:flex; align-items:center; gap:24px; }
+    .logo { display:flex; align-items:center; gap:8px; }
+    .logo-icon { width:24px; height:12px; display:flex; align-items:center; flex-shrink:0; }
+    .logo-icon img { width:100%; height:100%; object-fit:contain; display:block; }
+    .logo-text { font-weight:500; font-size:12px; color:#FFF; }
+    .logo-down { width:12px; height:12px; cursor:pointer; }
+    .logo-down img { width:100%; height:100%; filter: brightness(0) invert(0.4); transition: filter .15s; }
+    .logo-down:hover img { filter: brightness(0) invert(1); }
+
+    .account-pill { display:flex; align-items:center; gap:8px; padding:4px 8px; height:24px; background:#18181C; border-radius:4px; cursor:pointer; }
+    .pill-info { display:flex; align-items:center; gap:4px; }
+    .pill-username { font-weight:500; font-size:13px; color:#D8D8D8; }
+    .pill-dot { width:6px; height:6px; background:#14CF7E; border-radius:50%; flex-shrink:0; }
+    .pill-down { width:12px; height:12px; display:flex; align-items:center; cursor:pointer; }
+    .pill-down img { width:100%; height:100%; filter: brightness(0) invert(0.4); }
+
+    .window-controls { display:flex; align-items:center; gap:8px; }
+    .btn-wc { width:24px; height:24px; display:flex; align-items:center; justify-content:center; border:none; background:none; padding:0; cursor:pointer; }
+    .btn-wc img { width:100%; height:100%; display:block; filter: brightness(0) invert(0.4); transition: filter .15s; }
+    .btn-wc:hover img { filter: brightness(0) invert(1); }
+
+    /* ── Main + sidebar (shared) ── */
+    .main-content { display:flex; flex-direction:row; gap:12px; flex:1; min-height:0; position:relative; }
+    .sidebar { width:56px; flex-shrink:0; display:flex; flex-direction:column; justify-content:space-between; overflow:visible; margin-left:-12px; }
+    .nav-top { display:flex; flex-direction:column; gap:4px; }
+    .nav-btn { position:relative; width:56px; height:56px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+               border-radius:12px; border:none; background:none; padding:12px 16px; cursor:pointer; overflow:hidden; transition: padding .18s ease; }
+    .nav-btn.active { background:#18181C; cursor:default; }
+    .nav-btn img { width:24px; height:24px; display:block; flex-shrink:0; filter: brightness(0) invert(0.4); transition: transform .18s ease, filter .18s ease; position:relative; z-index:1; }
+    .nav-btn.active img { filter: brightness(0) saturate(200%) invert(55%) sepia(90%) saturate(800%) hue-rotate(230deg) brightness(105%); }
+    .nav-label { position:absolute; bottom:8px; left:50%; transform: translateX(-50%) translateY(120%); opacity:0;
+                 font-weight:500; font-size:11px; color:#656571; white-space:nowrap; transition: opacity .18s ease, transform .18s ease;
+                 pointer-events:none; z-index:0; }
+    .nav-btn:not(.active):hover { padding:8px 16px; }
+    .nav-btn:not(.active):hover img { transform: translateY(-6px); filter: brightness(0) invert(1); }
+    .nav-btn:not(.active):hover .nav-label { opacity:1; transform: translateX(-50%) translateY(0); }
+
+    /* ── Mods page layout ── */
+    .mods-page { flex:1; min-width:0; display:flex; flex-direction:column; gap:18px; overflow:hidden; }
+
+    .mods-header { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-shrink:0; }
+    .mods-header-left { display:flex; align-items:baseline; gap:12px; min-width:0; }
+    .mods-title { font-weight:600; font-size:24px; line-height:1; color:#FFF; }
+    .mods-title-sub { font-weight:500; font-size:13px; color:#656571; }
+
+    .version-pills { display:flex; gap:6px; flex-shrink:0; }
+    .v-pill {
+      padding: 8px 14px; height: 36px;
+      background:#18181C; border:1px solid #1C1C20; border-radius:8px;
+      cursor:pointer; font-family:'Onest',sans-serif; font-weight:500; font-size:13px; color:#9999A0;
+      transition: background .15s ease, color .15s ease, border-color .15s ease;
+      display:flex; align-items:center; gap:8px;
+    }
+    .v-pill:hover { color:#FFF; }
+    .v-pill.active {
+      background:#1F1F24; color:#FFF; border-color:#1C1C20;
+    }
+    .v-pill.active .v-pill-count { background: rgba(139,92,246,0.2); color:#8b5cf6; }
+    .v-pill-count {
+      font-size:11px; padding:2px 6px; border-radius:4px;
+      background: rgba(150,150,160,0.15); color:#9999A0;
+    }
+
+    /* ── Mod cards ── */
+    .mod-scroll { flex:1; min-height:0; overflow-y:auto; padding-right:4px; display:flex; flex-direction:column; gap:10px; }
+
+    .mod-card {
+      display:flex; gap:16px; padding:18px 20px;
+      background:#151517; border:1px solid #1C1C20; border-radius:12px;
+      align-items:center; min-height:88px;
+      transition: border-color .15s ease;
+    }
+    .mod-card:hover { border-color:#2A2A30; }
+
+    .mod-icon {
+      width:56px; height:56px; flex-shrink:0;
+      border-radius:10px; background:#1F1F24;
+      display:flex; align-items:center; justify-content:center; overflow:hidden;
+    }
+    .mod-icon img { max-width:100%; max-height:100%; object-fit:contain; }
+    .mod-icon.fallback {
+      background: linear-gradient(135deg, #2A2A30 0%, #18181C 100%);
+      color:#8b5cf6; font-weight:600; font-size:24px;
+    }
+
+    .mod-info { flex:1; min-width:0; display:flex; flex-direction:column; gap:6px; }
+    .mod-name-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .mod-name { font-weight:600; font-size:15px; color:#FFF; }
+
+    .mod-badge {
+      display:inline-flex; align-items:center; gap:4px;
+      padding:3px 8px; border-radius:4px; font-weight:500; font-size:11px;
+      backdrop-filter: blur(8px);
+    }
+    .mod-badge.recommended { background: rgba(139,92,246,0.18); color:#8b5cf6; }
+    .mod-badge.installed   { background: rgba(20,207,126,0.18); color:#14CF7E; }
+    .mod-badge.update      { background: rgba(255,191,0,0.18); color:#FFBF00; }
+    .mod-badge.custom      { background: rgba(150,150,160,0.18); color:#9999A0; }
+
+    .mod-desc { font-weight:500; font-size:12px; line-height:16px; color:#9999A0; }
+    .mod-meta { font-weight:500; font-size:11px; color:#656571; }
+
+    .mod-actions { display:flex; gap:8px; flex-shrink:0; align-items:center; }
+    .btn {
+      display:flex; justify-content:center; align-items:center; gap:8px;
+      padding:10px 18px; min-width:128px; height:40px;
+      background:#18181C; border:1px solid #1C1C20; border-radius:8px;
+      cursor:pointer; font-family:'Onest',sans-serif;
+      font-weight:500; font-size:12px; color:#FFF;
+      flex-shrink:0;
+      transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
+    }
+    .btn:hover {
+      background:#8b5cf6; border-color: transparent;
+      box-shadow: 0 5px 16px rgba(139,92,246,0.34);
+    }
+    .btn.ghost { background:transparent; }
+    .btn.ghost:hover { background:#2A2A30; box-shadow:none; }
+    .btn.installed-state {
+      background: transparent; cursor:default; color:#14CF7E; border-color:#1C1C20;
+    }
+    .btn.installed-state:hover { background: transparent; box-shadow: none; border-color:#1C1C20; }
+    .btn:disabled { opacity:.55; cursor:default; }
+
+    .spinner {
+      width:14px; height:14px; border:2px solid currentColor; border-top-color: transparent;
+      border-radius:50%; display:inline-block; animation: spin .8s linear infinite;
+    }
+    @keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+
+    .empty-state {
+      padding: 60px 24px; text-align:center;
+      color:#656571; font-weight:500; font-size:13px;
+      background:#151517; border:1px solid #1C1C20; border-radius:12px;
+    }
+    .empty-state-icon {
+      width:48px; height:48px; margin: 0 auto 16px;
+      border-radius:12px; background:#1F1F24;
+      display:flex; align-items:center; justify-content:center;
+      font-size: 24px;
+    }
+    .empty-state-title { color:#D8D8D8; font-size:14px; margin-bottom:4px; }
+
+    /* ── Popups ── */
+    .popup {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      padding: 12px; gap: 8px;
+      background: #151517;
+      border: 1px solid #1C1C20;
+      box-shadow: 0 34px 58.4px #141417;
+      border-radius: 8px;
+      z-index: 100;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.18s ease, visibility 0s linear 0.18s;
+    }
+    .popup.visible {
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 0.18s ease, visibility 0s linear 0s;
+    }
+    .popup-client { width: 234px; top: 56px; left: 24px; }
+    .popup-item {
+      display: flex; flex-direction: row; align-items: center;
+      padding: 8px; gap: 8px;
+      border-radius: 4px; cursor: pointer;
+      transition: background 0.12s;
+    }
+    .popup-item:hover { background: #18181C; }
+    .popup-item-icon { width: 16px; height: 16px; flex-shrink: 0; }
+    .popup-item-icon img {
+      width: 100%; height: 100%;
+      filter: brightness(0) invert(0.4);
+      transition: filter 0.12s;
+    }
+    .popup-item:hover .popup-item-icon img { filter: brightness(0) invert(0.85); }
+    .popup-item-label { flex: 1; font-weight: 500; font-size: 13px; color: #D8D8D8; white-space: nowrap; }
+    .popup-divider {
+      height: 1px; width: 100%;
+      background: #656571; opacity: 0.2;
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+
+    <!-- Titlebar -->
+    <div class="titlebar">
+      <div class="titlebar-left">
+        <div class="logo">
+          <div class="logo-icon"><img src="../assets/icons/logo.svg" alt=""></div>
+          <span class="logo-text">EnergyUtils</span>
+          <div class="logo-down"><img src="../assets/icons/down.svg" alt=""></div>
+        </div>
+      </div>
+      <div class="titlebar-right">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div class="account-pill" id="account-pill">
+            <div class="pill-info">
+              <span class="pill-username"></span>
+              <div class="pill-dot"></div>
+            </div>
+            <div class="pill-down"><img src="../assets/icons/down.svg" alt=""></div>
+          </div>
+        </div>
+        <div class="window-controls">
+          <button class="btn-wc" id="btn-hide"><img src="../assets/icons/hide.svg" alt=""></button>
+          <button class="btn-wc" id="btn-close"><img src="../assets/icons/close.svg" alt=""></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Client popup (from logo chevron) ── -->
+    <div class="popup popup-client" id="popup-client">
+      <div class="popup-divider"></div>
+      <div class="popup-item" data-action="check-update"><div class="popup-item-icon"><img src="../assets/icons/update.svg" alt=""></div><span class="popup-item-label">Проверка обновлений</span></div>
+      <div class="popup-divider"></div>
+      <div class="popup-item" data-action="open-mods"><div class="popup-item-icon"><img src="../assets/icons/folder.svg" alt=""></div><span class="popup-item-label">Папка с модами</span></div>
+      <div class="popup-divider"></div>
+      <div class="popup-item" data-url="https://t.me/energyutils"><div class="popup-item-icon"><img src="../assets/icons/link.svg" alt=""></div><span class="popup-item-label">Telegram</span></div>
+      <div class="popup-item" data-url="https://energyutils.me"><div class="popup-item-icon"><img src="../assets/icons/link.svg" alt=""></div><span class="popup-item-label">Сайт</span></div>
+      <div class="popup-divider"></div>
+      <div class="popup-item" data-nav="settings.html"><div class="popup-item-icon"><img src="../assets/icons/settings.svg" alt=""></div><span class="popup-item-label">Настройки</span></div>
+    </div>
+
+    <!-- Main -->
+    <div class="main-content">
+
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="nav-top">
+          <button class="nav-btn" onclick="navigateTo('dashboard.html')">
+            <img src="../assets/icons/home.svg" alt="">
+            <span class="nav-label">Главная</span>
+          </button>
+          <button class="nav-btn" onclick="navigateTo('versions.html')">
+            <img src="../assets/icons/puzzle.svg" alt="">
+            <span class="nav-label">Версии</span>
+          </button>
+          <button class="nav-btn active">
+            <img src="../assets/icons/import.svg" alt="">
+            <span class="nav-label">Моды</span>
+          </button>
+          <button class="nav-btn" onclick="navigateTo('accounts.html')">
+            <img src="../assets/icons/person.png" alt="">
+            <span class="nav-label">Аккаунты</span>
+          </button>
+          <button class="nav-btn" onclick="navigateTo('settings.html')">
+            <img src="../assets/icons/settings.svg" alt="">
+            <span class="nav-label">Настройки</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mods page -->
+      <div class="mods-page">
+        <div class="mods-header">
+          <div class="mods-header-left">
+            <span class="mods-title">Моды</span>
+            <span class="mods-title-sub" id="mods-title-sub">для <span id="mods-version-label">—</span></span>
+          </div>
+          <div class="version-pills" id="version-pills">
+            <!-- Динамически рендерятся скриптом — по одному пилу на каждую версию из ответа бекенда -->
+          </div>
+        </div>
+
+        <div class="mod-scroll" id="mod-scroll">
+          <div class="empty-state">
+            <div class="empty-state-icon">⏳</div>
+            <div class="empty-state-title">Загрузка</div>
+            <div>Тянем список модов с сервера…</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    function navigateTo(url) { window.location.href = url; }
+    document.getElementById('btn-hide').addEventListener('click', () => { window.nativeHide?.().catch(() => {}); });
+    document.getElementById('btn-close').addEventListener('click', () => { window.nativeClose?.().catch(() => {}); });
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+    document.body.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      if (e.clientY > 44) return;
+      if (e.target.closest('#btn-hide,#btn-close,.account-pill,.logo-down,.popup')) return;
+      window.nativeDragMove?.().catch(() => {});
+    });
+
+    // ── Cached user info → titlebar pill (no flash) ──
+    function applyUserToPill(u) {
+      if (!u) return;
+      const nameEl   = document.querySelector('#account-pill .pill-username');
+      const avatarEl = document.querySelector('#account-pill .avatar-sm');
+      if (nameEl && u.username) nameEl.textContent = u.username;
+      const src = u.avatarDataUrl || u.avatarUrl;
+      if (avatarEl && src) avatarEl.src = src;
+    }
+    try {
+      const cached = JSON.parse(localStorage.getItem('rv_user') || 'null');
+      if (cached) applyUserToPill(cached);
+    } catch (_) {}
+
+    // ── Поддерживаемые версии: расширяй по мере появления.
+    //    Источник правды — бекенд: если в нём для моды есть files['1.21.4'],
+    //    он попадёт в список доступных. Здесь только display-имена + порядок.
+    const VERSION_DEFS = [
+      { mc: '1.21.4', label: '1.21.4' }
+    ];
+
+    let allMods = [];                 // полный ответ бекенда
+    let availableVersions = [];       // ['1.16.5','1.21.4'] — версии у которых ≥1 мод
+    let currentVersion = '1.21.4';
+
+    document.addEventListener('DOMContentLoaded', () => {
+      requestAnimationFrame(() => {
+        document.body.classList.add('ready');
+        window.nativeReady?.().catch(() => {});
+      });
+      (async () => {
+        try {
+          const s = await window.nativeAuthState?.();
+          if (s?.user) {
+            try { localStorage.setItem('rv_user', JSON.stringify(s.user)); } catch (_) {}
+            applyUserToPill(s.user);
+          }
+        } catch (_) {}
+      })();
+
+      hydrate();
+    });
+
+    async function hydrate() {
+      // Берём выбранную версию из настроек (versions.html её сохраняет).
+      try {
+        const sel = await window.nativeGetSelectedVersion?.();
+        if (sel === 'fabric-1.21.4' || sel === 'fabric1214') currentVersion = '1.21.4';
+        else if (sel === 'fabric-1.21.4-beta')          currentVersion = '1.21.4-beta';
+      } catch (_) {}
+      await loadAllVersions();
+      renderVersionPills();
+      renderForVersion(currentVersion);
+    }
+
+    // Один запрос за все версии: nativeListMods даёт моды для конкретной mc_version.
+    // Сделаем по одному вызову на каждую известную версию, чтобы понять какие
+    // версии вообще имеют моды (для рендера пилюль).
+    async function loadAllVersions() {
+      const counts = {};
+      const cache = {};
+      await Promise.all(VERSION_DEFS.map(async v => {
+        try {
+          const resp = await window.nativeListMods?.(v.mc);
+          const data = (typeof resp === 'string') ? JSON.parse(resp) : resp;
+          if (data && data.ok && Array.isArray(data.mods)) {
+            counts[v.mc] = data.mods.length;
+            cache[v.mc]  = data.mods;
+          } else {
+            counts[v.mc] = 0;
+            cache[v.mc]  = [];
+          }
+        } catch (_) {
+          counts[v.mc] = 0;
+          cache[v.mc]  = [];
+        }
+      }));
+      // Сохраняем модули и определяем какие версии показывать
+      allMods = cache;
+      availableVersions = VERSION_DEFS.filter(v => counts[v.mc] > 0).map(v => v.mc);
+
+      // Если выбранная версия не имеет модов — переключаемся на первую доступную.
+      if (!availableVersions.includes(currentVersion) && availableVersions.length > 0) {
+        currentVersion = availableVersions[0];
+      }
+    }
+
+    function renderVersionPills() {
+      const pillsEl = document.getElementById('version-pills');
+      if (availableVersions.length === 0) {
+        pillsEl.innerHTML = '';
+        return;
+      }
+      pillsEl.innerHTML = VERSION_DEFS
+        .filter(v => availableVersions.includes(v.mc))
+        .map(v => `
+          <button class="v-pill ${v.mc === currentVersion ? 'active' : ''}" data-mc="${v.mc}">
+            ${v.label}
+            <span class="v-pill-count">${allMods[v.mc].length}</span>
+          </button>
+        `).join('');
+
+      pillsEl.querySelectorAll('.v-pill').forEach(p => {
+        p.addEventListener('click', () => {
+          const mc = p.dataset.mc;
+          if (mc === currentVersion) return;
+          currentVersion = mc;
+          renderVersionPills();
+          renderForVersion(mc);
+        });
+      });
+    }
+
+    function fmtSize(bytes) {
+      if (!bytes || bytes < 0) return '';
+      if (bytes < 1024) return bytes + ' Б';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' КБ';
+      return (bytes / 1024 / 1024).toFixed(1) + ' МБ';
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    }
+
+    function badge(mod) {
+      const s = mod.status;
+      if (s === 'installed_current') return `<span class="mod-badge installed">✓ Установлено</span>`;
+      if (s === 'update_available')  return `<span class="mod-badge update">↑ Обновление</span>`;
+      if (s === 'custom_version')    return `<span class="mod-badge custom">Своя версия</span>`;
+      if (mod.auto_install)          return `<span class="mod-badge recommended">⭐ Рекомендуется</span>`;
+      return '';
+    }
+
+    function actionButton(mod) {
+      const s = mod.status;
+      if (s === 'not_installed')    return `<button class="btn" data-action="download" data-id="${escapeHtml(mod.id)}">Скачать</button>`;
+      if (s === 'installed_current') return `<button class="btn ghost" data-action="delete" data-filename="${escapeHtml(mod.filename)}">Удалить</button>`;
+      if (s === 'update_available') return `<button class="btn" data-action="download" data-id="${escapeHtml(mod.id)}">Обновить</button>`;
+      if (s === 'custom_version')   return `<button class="btn ghost" data-action="download" data-id="${escapeHtml(mod.id)}">Заменить</button>`;
+      return '';
+    }
+
+    function modCardHtml(mod) {
+      const iconHtml = mod.icon
+        ? `<img src="${escapeHtml(mod.icon)}" alt="" onerror="this.parentElement.classList.add('fallback');this.outerHTML=this.parentElement.dataset.fallback;">`
+        : '';
+      const initial = (mod.name || mod.id || '?').substring(0, 1).toUpperCase();
+      return `
+        <div class="mod-card" data-id="${escapeHtml(mod.id)}">
+          <div class="mod-icon ${iconHtml ? '' : 'fallback'}" data-fallback="${escapeHtml(initial)}">
+            ${iconHtml || escapeHtml(initial)}
+          </div>
+          <div class="mod-info">
+            <div class="mod-name-row">
+              <span class="mod-name">${escapeHtml(mod.name || mod.id)}</span>
+              ${badge(mod)}
+            </div>
+            <div class="mod-desc">${escapeHtml(mod.description || '')}</div>
+            <div class="mod-meta">${escapeHtml(mod.filename || '')}${mod.size ? ' • ' + fmtSize(mod.size) : ''}</div>
+          </div>
+          <div class="mod-actions">${actionButton(mod)}</div>
+        </div>
+      `;
+    }
+
+    function renderForVersion(mc) {
+      document.getElementById('mods-version-label').textContent = `Minecraft ${mc}`;
+      const scroll = document.getElementById('mod-scroll');
+      const mods = allMods[mc] || [];
+
+      if (mods.length === 0) {
+        scroll.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📦</div>
+            <div class="empty-state-title">Для версии ${escapeHtml(mc)} пока нет модов</div>
+            <div>Когда появятся — отобразятся здесь автоматически.</div>
+          </div>
+        `;
+        return;
+      }
+
+      scroll.innerHTML = mods.map(modCardHtml).join('');
+      bindActions();
+    }
+
+    function bindActions() {
+      document.querySelectorAll('[data-action]').forEach(btn => {
+        btn.addEventListener('click', onAction);
+      });
+    }
+
+    async function onAction(e) {
+      const btn = e.currentTarget;
+      const action = btn.dataset.action;
+      const original = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner"></span>${action === 'delete' ? 'Удаление…' : 'Качаю…'}`;
+      try {
+        if (action === 'download') {
+          const r = await window.nativeDownloadMod?.(btn.dataset.id, currentVersion);
+          const j = (typeof r === 'string') ? JSON.parse(r) : r;
+          if (!j?.ok) alert('Не удалось скачать: ' + (j?.error || 'неизвестная ошибка'));
+        } else if (action === 'delete') {
+          await window.nativeDeleteMod?.(btn.dataset.filename, currentVersion);
+        }
+      } catch (err) {
+        alert('Ошибка: ' + (err?.message || err));
+      }
+      // Перезагружаем данные для текущей версии и перерисовываем
+      try {
+        const resp = await window.nativeListMods?.(currentVersion);
+        const data = (typeof resp === 'string') ? JSON.parse(resp) : resp;
+        if (data?.ok) {
+          allMods[currentVersion] = data.mods || [];
+          renderVersionPills();
+          renderForVersion(currentVersion);
+          return;
+        }
+      } catch (_) {}
+      // Если рефреш не удался — восстанавливаем кнопку
+      btn.disabled = false;
+      btn.innerHTML = original;
+    }
+
+    // ── Client popup (logo chevron) ──
+    (function initClientPopup() {
+      const popup = document.getElementById('popup-client');
+      const toggle = document.querySelector('.logo-down');
+      if (!popup || !toggle) return;
+      function closeAll() {
+        popup.classList.remove('visible');
+      }
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const wasOpen = popup.classList.contains('visible');
+        closeAll();
+        if (!wasOpen) popup.classList.add('visible');
+      });
+      popup.addEventListener('click', (e) => {
+        const item = e.target.closest('.popup-item');
+        if (!item) return;
+        e.stopPropagation();
+        closeAll();
+        if (item.dataset.url) { window.nativeOpenUrl?.(item.dataset.url).catch(() => {}); }
+        else if (item.dataset.nav) { navigateTo(item.dataset.nav); }
+        else if (item.dataset.action === 'open-mods') { window.nativeOpenUserMods?.().catch(() => {}); }
+        else if (item.dataset.action === 'check-update') {
+          alert('Проверка обновлений уже выполняется автоматически. Если моды устарели — удали и перекачай его здесь.');
+        }
+      });
+      document.addEventListener('mousedown', (e) => {
+        if (e.target.closest('.popup') || e.target.closest('.logo-down')) return;
+        closeAll();
+      });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAll(); });
+    })();
+  </script>
+</body>
+</html>

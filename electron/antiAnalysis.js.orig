@@ -1,0 +1,203 @@
+// Anti-analysis gate for EnergyUtils.
+// Blocks the launch (and keeps watching while the game runs) when a reverse-engineering
+// or memory tool is present. Read-only checks, no persistence.
+//
+// Hardening: blacklists are shipped obfuscated (XOR+base64) so the tool names are NOT
+// visible as plaintext in the binary/asar — a static `grep x64dbg` finds nothing.
+// Detection adds PEB NtGlobalFlag (debug heap) on top of process/window/command-line scans.
+// Everything degrades gracefully: if a check throws, the gate still works via the others.
+
+import { spawnSync, spawn } from "node:child_process";
+
+// --- Obfuscation helpers -----------------------------------------------------
+const __K = "EnU-v4.Guard";
+function decode(c) {
+  const raw = Buffer.from(c, "base64");
+  let r = "";
+  for (let i = 0; i < raw.length; i++) r += String.fromCharCode(raw[i] ^ __K.charCodeAt(i % __K.length));
+  return r;
+}
+const L = (arr) => arr.map(decode);
+
+// --- Encoded blacklists (decoded at runtime only) ---------------------------
+const P_NAMES = L([
+  "Mgc7SRRT","Mgc7SRRTVg==","Mgc7SRRTGHM=","KxomSQ==","Jgo3","Lgo=","LAM4WBhdWj4RBBARIgkwXw==","KgI5VBJWSQ==","KgI5VEAA","IQsjSBhC","Mx0xSBRBSSAQEw==","KB0jXhtbQA==","Mgc7RBVR","LRclSARQTCA=","LRclSARQTCBYAh4N","LRclSARQTCASFBs=","LRglXQ==","IQAmXQ8=","IQAmXQ8ZVn9D","IQA3XxlDXSIH","NQI4SRNWWyA=","LAo0","LAo0G0I=","LAo0XA==","LAo0XEAA","LAo0WQ==","LAo0WUAA","JgYwTAIUSykSCBwB","JgYwTAJRQCAcDxdJPVZjckAA","JgYwTAJRQCAcDxdJLF1tGw==","Jgs0VUAA","PVhhSRRT","PV1nSRRT","PVdjSRRT","Ng0sQRpV","IBYhXxNZSyMADAIBNw==","KAsyTBJBQzcQEw==","NQs8SQ==","IQs3WBFTSzU=","Ixw8SRc=","Ixw8SRcZXSIHFxcW","Ihs4ABxHAysaDgI=","Ixw8SRcZSSYRBhcQ","Ixw8SRcZRiIZERcW","NwcvRBg=","Nw8xTARRHA==","N1w=","N1w0ShNaWg==","JhshWRNG","LxslVAJRXA==","Lw8xVQ==","JB48QBlaRzMaEw==","NRw6ThtbQA==","NRw6ThtbQHFB","NRw6ThNHXS8UAhkBNw==","PQs7XhNGWCIHTAEHJBww","IgY8SQRV","JAA0QQ9OSy8QABYIIB0m","KgI5VBtVXSo=","Nhc4XhNVXCQd","LAM4WBhdWj4=","NRw6ThJBQzc=","IRs4XR9A","KQcjSB1Q","Nw84QBdE","NRw6ThNMXg==",
+  "IQAmXQ8=","IQthSRlA","LAImXQ8=","PQ87TBpNVCIH","LAImXQ9XQyM=","IQAzRBpR","JgYwTAIZSykSCBwB","LAM9SA4=","JggzDRNMXisaExcW","KAo3Sg==","LRohXRJRTDISBhcW","MQ0lWx9RWQ==","JgY0XxpRXQ==", "MgcnSAVcTzUe",
+]);
+//          ↑ dnspy, de4dot, ilspy, xanalyzer, ilspycmd, dnfile, cheat-engine,
+//            imhex, cff explorer, mdbg, httpdebugger, tcpview, charles, wireshark
+
+const W_KW = L([
+  "IgY8SQRV","JAA0QQ9OSy8QABYIIB0m","IQAmXQ8=","IQAmXQ9RVg==","PVhhSRRT","PV1nSRRT","PVdjSRRT","JgYwTAIUSykSCBwB","JgYwTAJRQCAcDxc=","LAM4WBhdWj5VBRcGMAkySAQ=","LAM4WBhdWj4RBBARIgkwXw==","KgI5VBJWSQ==","KgI5VFZQTCA=","Mgc7SRRT","Mgc7SRlDXWcRBBARIgkwXw==","Jgo3DVsU","Lgp1AFY=","NgEzWR9XSw==","LRclSARQTCA=","NQI4SRNWWyA=","LAo0DQZGQQ==","LAo0DRBGSyI=","LAo0DQBdSzA=","ZUN1RBJV","LAo0DVsU","KAc2XxlHQSEBQQQNNhs0QVZHWjIRCB0=","JBohTBVcDjMaQQIWKg0wXgU=","Ng0sQRpV","IBYhXxNZSyMADAIBNw==","KAsyTBJBQzcQEw==","Ixw8SRc=","Nw8xTARRHA==","NwcvRBg=","JhshWRNG","NRw6ThNHXWcdABEPIBw=","NRw6ThtbQGdYQQEdNgc7WRNGQCYZEg==","IRs4XQ==","NRw6ThNHXWcQGQIIKhwwXw==","KQcjSB1Q","Nw84QBdE",
+]);
+
+const C_KW = L([
+  "IgY8SQRV","JAA0QQ9OSy8QABYIIB0m","LAo0G0IaSz8Q","LAo0AxNMSw==","LAo0WVhRViI=","PVhhSRRT","PV1nSRRT","IQAmXQ8=","LAM4WBhdWj4RBBARIgkwXw==","KgI5VBJWSQ==","Mgc7SRRT","Mgc7RBVR","NQI4SRNWWyA=","JgYwTAJRQCAcDxc=","LRclSARQTCA=","Ng0sQRpV","Ixw8SRc=","Ixw8SRcZXSIHFxcW","NwcvRBg=","Nw8xTARRHA==","JhshWRNG","Lw8xVQ==",
+]);
+
+// Public alias used by the tasklist fallback.
+export const BLOCKED_PROCESS_NAMES = P_NAMES;
+
+const psArray = (list) => list.map((s) => "'" + s.replace(/'/g, "''") + "'").join(",");
+
+// The C# helper reads the parent (launcher) process PEB NtGlobalFlag.
+// On x64 PEB.NtGlobalFlag sits at +0x68; bits 0x70 (debug-heap flags) are set
+// when a debugger touches the heap. Renamed/custom debuggers are caught this way
+// even though their image name is not in any blacklist.
+const NATIVE_DEF = `[
+  DllImport("kernel32.dll")] public static extern bool IsDebuggerPresent();
+  [DllImport("kernel32.dll")] public static extern bool CheckRemoteDebuggerPresent(IntPtr h, out bool d);
+  [DllImport("kernel32.dll")] public static extern IntPtr OpenProcess(uint a, bool inherit, int pid);
+  [DllImport("kernel32.dll")] public static extern bool ReadProcessMemory(IntPtr h, IntPtr a, byte[] b, int len, out int r);
+  [DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr h);
+  [DllImport("ntdll.dll")] public static extern int NtQueryInformationProcess(IntPtr h, int cls, byte[] info, int len, out int ret);
+  public static long GetNtGlobalFlag(int pid, out bool ok){
+    ok=false;
+    IntPtr h=OpenProcess(0x0410,false,pid);
+    if(h==IntPtr.Zero){ return 0; }
+    try{
+      byte[] pbi=new byte[64]; int ret=0;
+      if(NtQueryInformationProcess(h,0,pbi,pbi.Length,out ret)!=0){ return 0; }
+      long peb=BitConverter.ToInt64(pbi,8);
+      byte[] flags=new byte[4]; int rd=0;
+      if(!ReadProcessMemory(h,(IntPtr)(peb+0x68),flags,4,out rd)||rd<4){ return 0; }
+      ok=true;
+      return BitConverter.ToInt32(flags,0);
+    } catch { return 0; }
+    finally { CloseHandle(h); }
+  }`;
+
+const PS_SCRIPT = `
+$ErrorActionPreference='SilentlyContinue'
+$names = @(${psArray(P_NAMES)})
+$titles = @(${psArray(W_KW)})
+$cmds  = @(${psArray(C_KW)})
+$hits = @()
+Get-Process | ForEach-Object {
+  $n = $_.ProcessName.ToLower()
+  if ($names -contains $n) { $hits += ('proc:' + $n) }
+  $t = ''
+  try { $t = [string]$_.MainWindowTitle } catch {}
+  if ($t) {
+    $lt = $t.ToLower()
+    foreach ($k in $titles) { if ($lt.Contains($k)) { $hits += ('win:' + $t); break } }
+  }
+}
+Get-CimInstance Win32_Process | ForEach-Object {
+  if ($_.ProcessId -eq $PID) { return }
+  $c = [string]$_.CommandLine
+  if (-not $c) { return }
+  $lc = $c.ToLower()
+  foreach ($k in $cmds) { if ($lc.Contains($k)) { $hits += ('cmd:' + $k); break } }
+}
+try {
+  Add-Type -Namespace SgA -Name K -MemberDefinition '${NATIVE_DEF}' | Out-Null
+  if ([SgA.K]::IsDebuggerPresent()) { $hits += 'proc:self-debugger' }
+  $par = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID").ParentProcessId
+  $p = Get-Process -Id $par
+  $d = $false
+  if ([SgA.K]::CheckRemoteDebuggerPresent($p.Handle, [ref]$d) -and $d) { $hits += 'proc:attached-debugger' }
+  $gf = $false; $flag = [SgA.K]::GetNtGlobalFlag($par, [ref]$gf)
+  if ($gf -and ($flag -band 0x70)) { $hits += 'proc:ntglobalflag-debugheap' }
+} catch {}
+$hits | Select-Object -Unique
+`.trim();
+
+function parseHits(stdout) {
+  if (!stdout) return [];
+  return [...new Set(stdout.split(/\r?\n/).map((s) => s.trim()).filter(Boolean))];
+}
+
+function tasklistNameFallback() {
+  const r = spawnSync("tasklist", ["/FO", "CSV", "/NH"], {
+    encoding: "utf8",
+    timeout: 8000,
+    windowsHide: true
+  });
+  if (r.status !== 0 || !r.stdout) return [];
+  const found = [];
+  for (const line of r.stdout.split(/\r?\n/)) {
+    const m = line.match(/^"([^"]+)"/);
+    if (!m) continue;
+    const name = m[1].toLowerCase().replace(/\.exe$/, "");
+    if (BLOCKED_PROCESS_NAMES.includes(name)) found.push("proc:" + name);
+  }
+  return [...new Set(found)];
+}
+
+// Async PowerShell runner: the launcher event loop must stay responsive, because the
+// watchdog re-runs this while the game is already up.
+function runPowerShell(timeoutMs = 12000) {
+  return new Promise((resolve) => {
+    let out = "";
+    let err = "";
+    let done = false;
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      resolve({ ok, stdout: out, stderr: err });
+    };
+    let p;
+    try {
+      p = spawn(
+        "powershell.exe",
+        ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", PS_SCRIPT],
+        { windowsHide: true }
+      );
+    } catch (e) {
+      return finish(false);
+    }
+    const timer = setTimeout(() => { try { p.kill(); } catch {} finish(false); }, timeoutMs);
+    p.stdout.on("data", (d) => { out += d; });
+    p.stderr.on("data", (d) => { err += d; });
+    p.on("error", () => { clearTimeout(timer); finish(false); });
+    p.on("close", (code) => { clearTimeout(timer); finish(code === 0); });
+  });
+}
+
+/** Full sweep: process names, window titles, command lines, debugger flags on self + parent. */
+export async function detectAnalysisTools() {
+  const r = await runPowerShell();
+  let hits = r.ok ? parseHits(r.stdout) : [];
+  if (!r.ok && hits.length === 0) {
+    // PowerShell disabled by policy / blocked by the very tooling we look for -> tasklist.
+    hits = tasklistNameFallback();
+  }
+  return { blocked: hits.length > 0, hits };
+}
+
+// --- Lightweight watchdog --------------------------------------------------------
+let watchdogTimer = null;
+
+/** Starts the post-launch watchdog. Calls onHit(hits) once when a tool shows up. */
+export function startWatchdog(onHit, intervalMs = 5000) {
+  stopWatchdog();
+  let busy = false;
+  watchdogTimer = setInterval(async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      const gate = await detectAnalysisTools();
+      if (gate.blocked) {
+        stopWatchdog();
+        onHit(gate.hits);
+      }
+    } catch { /* never let the watchdog crash the launcher */ }
+    finally { busy = false; }
+  }, intervalMs);
+  if (watchdogTimer.unref) watchdogTimer.unref();
+}
+
+export function stopWatchdog() {
+  if (watchdogTimer) {
+    clearInterval(watchdogTimer);
+    watchdogTimer = null;
+  }
+}
+
+export function gateSummary(hits) {
+  const names = hits
+    .map((h) => h.replace(/^(proc|win|cmd):/, ""))
+    .map((h) => (h.length > 60 ? h.slice(0, 57) + "..." : h));
+  return [...new Set(names)].join(", ");
+}

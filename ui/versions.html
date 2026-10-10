@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>EnergyUtils — Версии</title>
+  <script src="../assets/scripts/rv-launcher-common.js" defer></script>
+  <script src="../assets/scripts/eu-i18n.js" defer></script>
+  <style>
+    @font-face {
+      font-family: 'Onest';
+      src: url('../assets/fonts/Onest-Regular.ttf') format('truetype');
+      font-weight: 400; font-style: normal;
+    }
+    @font-face {
+      font-family: 'Onest';
+      src: url('../assets/fonts/Onest-Medium.ttf') format('truetype');
+      font-weight: 500; font-style: normal;
+    }
+    @font-face {
+      font-family: 'Onest';
+      src: url('../assets/fonts/Onest-SemiBold.ttf') format('truetype');
+      font-weight: 600; font-style: normal;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    ::-webkit-scrollbar { display: none; }
+
+    html, body {
+      width: 1120px; height: 650px;
+      overflow: hidden;
+      background: #141417;
+      font-family: 'Onest', sans-serif;
+      user-select: none;
+    }
+
+    /* Page fade-in / fade-out for transitions.
+       Only the content fades — titlebar and sidebar stay put so switching
+       tabs feels like updating an inner region, not reloading the window. */
+    .main-content > *:not(.sidebar):not(.popup):not(.toast-error):not(.toast-info) {
+      opacity: 0;
+      transition: opacity 0.22s ease;
+    }
+    body.ready .main-content > *:not(.sidebar):not(.popup):not(.toast-error):not(.toast-info) {
+      opacity: 1;
+    }
+
+    /* ── App root ── */
+    .app {
+      width: 1120px; height: 650px;
+      padding: 20px 24px 24px 24px;
+      display: flex; flex-direction: column; gap: 18px;
+      background: #141417;
+      border: 1px solid #1C1C20;
+      box-shadow: 0 34px 58.4px #141417;
+      border-radius: 8px;
+    }
+
+    /* ── Titlebar (same as dashboard) ── */
+    .titlebar {
+      display: flex; flex-direction: row;
+      justify-content: space-between; align-items: center;
+      width: 100%; height: 24px; flex-shrink: 0;
+    }
+    .titlebar-left  { display: flex; align-items: center; gap: 24px; }
+    .titlebar-right { display: flex; align-items: center; gap: 24px; }
+
+    .logo { display: flex; align-items: center; gap: 8px; }
+    .logo-icon { width: 24px; height: 12px; display: flex; align-items: center; flex-shrink: 0; }
+    .logo-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .logo-text { font-weight: 500; font-size: 12px; color: #FFFFFF; }
+    .logo-down {
+      width: 12px; height: 12px; display: flex; align-items: center;
+      flex-shrink: 0; cursor: pointer;
+    }
+    .logo-down img { width: 100%; height: 100%; filter: brightness(0) invert(0.4); transition: filter 0.15s; }
+    .logo-down:hover img { filter: brightness(0) invert(1); }
+
+    .account-pill {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 8px; height: 24px;
+      background: #18181C; border-radius: 4px; cursor: pointer;
+    }
+    .pill-info { display: flex; align-items: center; gap: 4px; }
+    .pill-username { font-weight: 500; font-size: 13px; color: #D8D8D8; }
+    .pill-dot { width: 6px; height: 6px; background: #14CF7E; border-radius: 50%; flex-shrink: 0; }
+    .pill-down { width: 12px; height: 12px; display: flex; align-items: center; cursor: pointer; }
+    .pill-down img { width: 100%; height: 100%; filter: brightness(0) invert(0.4); transition: filter 0.15s; }
+    .pill-down:hover img { filter: brightness(0) invert(1); }
+
+    .window-controls { display: flex; align-items: center; gap: 8px; }
+    .btn-wc {
+      width: 24px; height: 24px;
+      display: flex; align-items: center; justify-content: center;
+      border: none; background: none; padding: 0; cursor: pointer;
+    }
+    .btn-wc img {
+      width: 100%; height: 100%; display: block;
+      filter: brightness(0) invert(0.4);
+      transition: filter 0.15s;
+    }
+    .btn-wc:hover img  { filter: brightness(0) invert(1); }
+    .btn-wc:active img { filter: brightness(0) invert(0.7); }
+
+    /* ── Main layout ── */
+    .main-content {
+      display: flex; flex-direction: row;
+      gap: 12px; flex: 1; min-height: 0;
+      position: relative;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 56px; flex-shrink: 0;
+      display: flex; flex-direction: column;
+      justify-content: space-between;
+      overflow: visible;
+      margin-left: -12px;
+    }
+    .nav-top { display: flex; flex-direction: column; gap: 4px; }
+
+    .nav-btn {
+      position: relative;
+      width: 56px; height: 56px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      border-radius: 12px; border: none; background: none;
+      padding: 12px 16px;
+      cursor: pointer;
+      overflow: hidden;
+      transition: padding 0.18s ease;
+    }
+    .nav-btn.active { background: #18181C; cursor: default; }
+    .nav-btn img {
+      width: 24px; height: 24px; display: block; flex-shrink: 0;
+      filter: brightness(0) invert(0.4);
+      transition: transform 0.18s ease, filter 0.18s ease;
+      position: relative; z-index: 1;
+    }
+    .nav-btn.active img {
+      filter: brightness(0) saturate(200%) invert(55%) sepia(90%)
+              saturate(800%) hue-rotate(230deg) brightness(105%);
+    }
+    .nav-label {
+      position: absolute; bottom: 8px;
+      left: 50%; transform: translateX(-50%) translateY(120%);
+      opacity: 0;
+      font-weight: 500; font-size: 11px; color: #656571;
+      white-space: nowrap;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      pointer-events: none; z-index: 0;
+    }
+    .nav-btn:not(.active):hover { padding: 8px 16px; }
+    .nav-btn:not(.active):hover img {
+      transform: translateY(-6px);
+      filter: brightness(0) invert(1);
+    }
+    .nav-btn:not(.active):hover .nav-label {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Quit button — slides left and turns red on hover, no label */
+    .nav-btn.nav-quit:hover { padding: 12px 16px; }
+    .nav-btn.nav-quit:hover img {
+      transform: translateX(-3px);
+      filter: brightness(0) saturate(100%) invert(56%) sepia(93%)
+              saturate(2605%) hue-rotate(324deg) brightness(104%) contrast(102%);
+    }
+
+    /* ── Versions center column ── */
+    .versions-list {
+      flex: 1; min-width: 0;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+
+    .version-card {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      padding: 24px;
+      border-radius: 12px;
+      cursor: pointer;
+      display: flex; flex-direction: column;
+      justify-content: space-between;
+      min-height: 0;
+    }
+    .version-card-bg {
+      position: absolute; inset: 0;
+      background-size: cover; background-position: center;
+      transition: transform 0.45s ease;
+      z-index: 0;
+    }
+    .version-card-overlay {
+      position: absolute; inset: 0;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .version-card:not(.active) .version-card-overlay {
+      background: linear-gradient(180deg, rgba(20,20,23,0.8) 0%, #141417 100%);
+    }
+    .version-card.active .version-card-overlay {
+      background: linear-gradient(180deg, rgba(20,20,23,0.4) 0%, #141417 100%);
+    }
+    .version-card:hover .version-card-bg {
+      transform: scale(1.03) translateY(-4px);
+    }
+
+    /* Locked card — desaturated, no hover scale, cursor reverts to default. */
+    .version-card.locked { cursor: not-allowed; }
+    .version-card.locked .version-card-bg { filter: grayscale(0.8) brightness(0.7); }
+    .version-card.locked:hover .version-card-bg { transform: none; }
+
+    /* Bottom-right info toast — slides in for 4s when the user clicks a
+       locked version card. Auto-hides via timer in JS. */
+    .toast-info {
+      position: absolute;
+      right: 24px; bottom: 24px;
+      width: 300px;
+      display: flex; flex-direction: column;
+      padding: 16px; gap: 12px;
+      background: #151517;
+      border: 1px solid #1C1C20;
+      box-shadow: 0 34px 58.4px #141417;
+      border-radius: 8px;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      pointer-events: none;
+      z-index: 200;
+    }
+    .toast-info.visible { opacity: 1; transform: translateY(0); }
+    .toast-info-header { display: flex; align-items: center; gap: 8px; }
+    .toast-info-icon { width: 16px; height: 16px; flex-shrink: 0; color: #8b5cf6; }
+    .toast-info-title { font-weight: 500; font-size: 13px; color: #FFFFFF; flex: 1; }
+    .toast-info-body { padding-left: 24px; font-weight: 500; font-size: 11px; line-height: 14px; color: #656571; }
+
+    .vc-top, .vc-bottom {
+      position: relative; z-index: 2;
+      display: flex; align-items: center;
+      width: 100%;
+    }
+    .vc-top { justify-content: space-between; }
+    .vc-bottom { flex-direction: column; align-items: flex-start; gap: 16px; }
+
+    .vc-logo { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
+    .vc-logo img { width: 100%; height: 100%; }
+
+    .vc-badge-installed {
+      display: flex; align-items: center; gap: 4px;
+      padding: 4px 8px;
+      background: rgba(20, 207, 126, 0.3);
+      backdrop-filter: blur(8px);
+      border-radius: 4px;
+    }
+    .vc-badge-installed-icon { width: 16px; height: 16px; flex-shrink: 0; display: block; }
+    .vc-badge-installed-text {
+      font-weight: 500; font-size: 13px; line-height: 17px;
+      color: #14CF7E;
+    }
+
+    .vc-version-row {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .vc-icon { width: 32px; height: 32px; }
+    .vc-icon img { width: 100%; height: 100%; }
+    .vc-title {
+      font-weight: 600; font-size: 24px; line-height: 1;
+      color: #FFFFFF;
+    }
+    .vc-meta {
+      display: flex; flex-wrap: wrap; gap: 16px;
+    }
+    .vc-meta-primary   { font-weight: 500; font-size: 11px; color: #D8D8D8; }
+    .vc-meta-secondary { font-weight: 500; font-size: 11px; color: #656571; }
+
+    /* ── Detail panel ── */
+    .version-detail {
+      position: relative;
+      width: 400px; flex-shrink: 0;
+      height: 100%;
+      background: #151517;
+      border: 1px solid #1C1C20;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .vd-layer {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      padding: 24px; gap: 24px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    .vd-layer.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .vd-header {
+      display: flex; align-items: center; gap: 12px;
+      flex-shrink: 0;
+    }
+    .vd-title {
+      font-weight: 600; font-size: 24px; line-height: 1;
+      color: #FFFFFF;
+    }
+    .vd-badge {
+      display: flex; align-items: center; gap: 4px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      backdrop-filter: blur(8px);
+    }
+    .vd-badge-fabric {
+      background: rgba(219, 208, 180, 0.3);
+    }
+    .vd-badge-text {
+      font-weight: 500; font-size: 13px; line-height: 17px;
+      color: #DBD0B4;
+    }
+    .vd-badge-icon { width: 16px; height: 16px; }
+    .vd-badge-icon img { width: 100%; height: 100%; }
+
+    .vd-description {
+      font-weight: 500; font-size: 13px; line-height: 17px;
+      color: #656571;
+      flex-shrink: 0;
+    }
+
+    .vd-button {
+      display: flex; justify-content: center; align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      height: 40px;
+      background: #18181C;
+      border: 1px solid #1C1C20;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: 'Onest', sans-serif;
+      font-weight: 500; font-size: 12px; color: #FFFFFF;
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .vd-button:hover {
+      background: #8b5cf6;
+      border-color: transparent;
+      box-shadow: 0 5px 16px rgba(139, 92, 246, 0.34);
+    }
+
+    /* Preview — single image (frame 125) */
+    .vd-preview {
+      flex: 1; min-height: 0;
+      overflow: hidden;
+      border-radius: 12px;
+    }
+    .vd-preview-img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    /* ── Popups (same as dashboard) ── */
+    .popup {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      padding: 12px; gap: 8px;
+      background: #151517;
+      border: 1px solid #1C1C20;
+      box-shadow: 0 34px 58.4px #141417;
+      border-radius: 8px;
+      z-index: 100;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.18s ease, visibility 0s linear 0.18s;
+    }
+    .popup.visible {
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 0.18s ease, visibility 0s linear 0s;
+    }
+    .popup-client { width: 234px; top: 56px; left: 24px; }
+    .popup-account { width: 167px; top: 56px; right: 80px; }
+
+    .popup-item {
+      display: flex; flex-direction: row; align-items: center;
+      padding: 8px; gap: 8px;
+      border-radius: 4px; cursor: pointer;
+      transition: background 0.12s;
+    }
+    .popup-item:hover { background: #18181C; }
+    .popup-item-icon { width: 16px; height: 16px; flex-shrink: 0; }
+    .popup-item-icon img {
+      width: 100%; height: 100%;
+      filter: brightness(0) invert(0.4);
+      transition: filter 0.12s;
+    }
+    .popup-item:hover .popup-item-icon img { filter: brightness(0) invert(0.85); }
+    .popup-item-product { cursor: default; opacity: 0.55; }
+    .popup-item-product:hover { background: transparent; }
+    .popup-item.popup-item-product .popup-item-icon img { filter: none; }
+    .popup-item-label {
+      flex: 1;
+      font-weight: 500; font-size: 13px; color: #D8D8D8;
+    }
+    .popup-divider {
+      height: 1px; width: 100%;
+      background: #656571; opacity: 0.2;
+    }
+
+    /* Quit confirmation popup — anchored next to the quit button */
+    .popup-quit {
+      width: 234px;
+      bottom: 0;
+      left: 68px;
+      padding: 16px;
+      gap: 16px;
+    }
+    .popup-quit-header {
+      display: flex; align-items: center;
+      gap: 8px; width: 100%;
+    }
+    .popup-quit-icon { width: 16px; height: 16px; flex-shrink: 0; }
+    .popup-quit-icon img {
+      width: 100%; height: 100%;
+      filter: brightness(0) saturate(100%) invert(56%) sepia(93%)
+              saturate(2605%) hue-rotate(324deg) brightness(104%) contrast(102%);
+    }
+    .popup-quit-title {
+      font-weight: 500; font-size: 15px; line-height: 19px;
+      color: #FFFFFF;
+    }
+    .popup-quit-desc {
+      font-weight: 500; font-size: 13px; line-height: 17px;
+      color: #656571;
+      width: 100%;
+    }
+    .popup-quit-actions {
+      display: flex; flex-direction: row;
+      gap: 8px; width: 100%;
+    }
+    .popup-quit-actions button {
+      padding: 8px 12px;
+      height: 33px;
+      border: none; background: transparent;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: 'Onest', sans-serif;
+      font-weight: 500; font-size: 13px; line-height: 17px;
+      color: #D8D8D8;
+      transition: background 0.12s ease, color 0.12s ease;
+    }
+    .popup-quit-confirm { flex: 1; }
+    .popup-quit-confirm:hover { background: #1C1C20; color: #FF6363; }
+    .popup-quit-cancel  { flex-shrink: 0; }
+    .popup-quit-cancel:hover { background: #18181C; color: #FFFFFF; }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+
+    <!-- Titlebar -->
+    <div class="titlebar">
+      <div class="titlebar-left">
+        <div class="logo">
+          <div class="logo-icon">
+            <img src="../assets/icons/logo.svg" alt="">
+          </div>
+          <span class="logo-text">EnergyUtils</span>
+          <div class="logo-down">
+            <img src="../assets/icons/down.svg" alt="">
+          </div>
+        </div>
+      </div>
+      <div class="titlebar-right">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div class="account-pill" id="account-pill">
+            <div class="pill-info">
+              <span class="pill-username"></span><script>(function(){var c=window.__rvCache;if(!c){try{c=JSON.parse(localStorage.getItem('rv_user')||'null');}catch(_){}}if(c&&c.username)document.currentScript.previousElementSibling.textContent=c.username;})();</script>
+              <div class="pill-dot"></div>
+            </div>
+            <div class="pill-down">
+              <img src="../assets/icons/down.svg" alt="">
+            </div>
+          </div>
+        </div>
+        <div class="window-controls">
+          <button class="btn-wc" id="btn-hide"><img src="../assets/icons/hide.svg" alt=""></button>
+          <button class="btn-wc" id="btn-close"><img src="../assets/icons/close.svg" alt=""></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main -->
+    <div class="main-content">
+
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="nav-top">
+          <button class="nav-btn" onclick="navigateTo('dashboard.html')">
+            <img src="../assets/icons/home.svg" alt="">
+            <span class="nav-label">Главная</span>
+          </button>
+          <button class="nav-btn active">
+            <img src="../assets/icons/puzzle.svg" alt="">
+            <span class="nav-label">Версии</span>
+          </button>
+          <button class="nav-btn" onclick="navigateTo('mods.html')">
+            <img src="../assets/icons/import.svg" alt="">
+            <span class="nav-label">Моды</span>
+          </button>
+          <button class="nav-btn" onclick="navigateTo('accounts.html')">
+            <img src="../assets/icons/person.png" alt="">
+            <span class="nav-label">Аккаунты</span>
+          </button>
+          <button class="nav-btn" onclick="navigateTo('settings.html')">
+            <img src="../assets/icons/settings.svg" alt="">
+            <span class="nav-label">Настройки</span>
+          </button>
+        </div>
+        <button class="nav-btn nav-quit" id="btn-quit">
+          <img src="../assets/icons/quit.svg" alt="">
+        </button>
+      </div>
+
+      <!-- Quit confirmation popup — anchored next to the quit button -->
+      <div class="popup popup-quit" id="popup-quit">
+        <div class="popup-quit-header">
+          <div class="popup-quit-icon"><img src="../assets/icons/quit.svg" alt=""></div>
+          <span class="popup-quit-title">Выход</span>
+        </div>
+        <p class="popup-quit-desc">Закрыть EnergyUtils?</p>
+        <div class="popup-quit-actions">
+          <button class="popup-quit-confirm" id="quit-confirm">Подтверждаю</button>
+          <button class="popup-quit-cancel"  id="quit-cancel">Остаться</button>
+        </div>
+      </div>
+
+      <!-- Versions list -->
+      <div class="versions-list">
+
+        <div class="version-card active" data-version="1.21.4" data-client-type="fabric-1.21.4">
+          <div class="version-card-bg" style="background-image: url('../assets/icons/versions/background_fabric_1.21.4.png')"></div>
+          <div class="version-card-overlay"></div>
+          <div class="vc-top">
+            <div class="vc-logo"><img src="../assets/icons/logo.svg" alt=""></div>
+            <div class="vc-badge-installed">
+              <svg class="vc-badge-installed-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M7.83333 2C11.0551 2 13.6667 4.61158 13.6667 7.83333C13.6667 11.0551 11.0551 13.6667 7.83333 13.6667C4.61158 13.6667 2 11.0551 2 7.83333C2 4.61158 4.61158 2 7.83333 2ZM7.83333 3.16667C6.59566 3.16667 5.40867 3.65833 4.5335 4.5335C3.65833 5.40867 3.16667 6.59566 3.16667 7.83333C3.16667 9.07101 3.65833 10.258 4.5335 11.1332C5.40867 12.0083 6.59566 12.5 7.83333 12.5C9.07101 12.5 10.258 12.0083 11.1332 11.1332C12.0083 10.258 12.5 9.07101 12.5 7.83333C12.5 6.59566 12.0083 5.40867 11.1332 4.5335C10.258 3.65833 9.07101 3.16667 7.83333 3.16667Z" fill="#14CF7E"/>
+                <path d="M10.6465 5.64648C10.8417 5.45122 11.1583 5.45122 11.3535 5.64648C11.5488 5.84175 11.5488 6.15825 11.3535 6.35352L7.82487 9.88216C7.36927 10.3377 6.63073 10.3377 6.17513 9.88216L4.31315 8.02018C4.11789 7.82492 4.11789 7.50841 4.31315 7.31315C4.50841 7.11789 4.82492 7.11789 5.02018 7.31315L6.88216 9.17513C6.94724 9.24015 7.05276 9.24015 7.11784 9.17513L10.6465 5.64648Z" fill="#14CF7E"/>
+              </svg>
+              <span class="vc-badge-installed-text">Установлено</span>
+            </div>
+          </div>
+          <div class="vc-bottom">
+            <div class="vc-version-row">
+              <div class="vc-icon"><img src="../assets/icons/fabric.svg" alt=""></div>
+              <span class="vc-title">Fabric 1.21.4</span>
+            </div>
+            <div class="vc-meta">
+              <span class="vc-meta-primary js-rv-game-last-update rv-skel" data-client-type="fabric-1.21.4" style="display:inline-block;width:140px;height:10px;"></span>
+              <span class="vc-meta-secondary js-rv-last-played" data-client-type="fabric-1.21.4"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="version-card locked" data-version="1.21.4-beta" data-client-type="fabric-1.21.4-beta">
+          <div class="version-card-bg" style="background-image: url('../assets/icons/versions/background_fabric_1.21.4-beta.png')"></div>
+          <div class="version-card-overlay"></div>
+          <div class="vc-top">
+            <div class="vc-logo"><img src="../assets/icons/logo.svg" alt=""></div>
+            
+          </div>
+          <div class="vc-bottom">
+            <div class="vc-version-row">
+              <div class="vc-icon"><img src="../assets/icons/fabric.svg" alt=""></div>
+              <span class="vc-title">BETA 1.21.4</span>
+            </div>
+            <div class="vc-meta">
+              <span class="vc-meta-primary js-rv-game-last-update rv-skel" data-client-type="fabric-1.21.4-beta" style="display:inline-block;width:140px;height:10px;"></span>
+              <span class="vc-meta-secondary js-rv-last-played" data-client-type="fabric-1.21.4-beta"></span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Detail panel -->
+      <div class="version-detail">
+
+        <!-- Layer: 1.16.5 -->
+        <div class="vd-layer" data-version="1.21.4-beta">
+          <div class="vd-header">
+            <h2 class="vd-title">Minecraft 1.21.4 BETA</h2>
+            <div class="vd-badge vd-badge-fabric">
+              <span class="vd-badge-text">Beta</span>
+              <div class="vd-badge-icon"><img src="../assets/icons/fabric.svg" alt=""></div>
+            </div>
+          </div>
+          <p class="vd-description">
+            BETA-версия EnergyUtils для закрытого тестирования. Доступ ограничен — играй на стабильной версии 1.21.4.
+          </p>
+          <button class="vd-button vd-select-btn">Выбрать</button>
+          <div class="vd-preview">
+            <img class="vd-preview-img" src="../assets/icons/version_preview_1.16.5.png" alt="">
+          </div>
+        </div>
+
+        <!-- Layer: 1.21.4 -->
+        <div class="vd-layer active" data-version="1.21.4">
+          <div class="vd-header">
+            <h2 class="vd-title">Minecraft 1.21.4</h2>
+            <div class="vd-badge vd-badge-fabric">
+              <span class="vd-badge-text">Fabric</span>
+              <div class="vd-badge-icon"><img src="../assets/icons/fabric.svg" alt=""></div>
+            </div>
+          </div>
+          <p class="vd-description">
+            Сборка EnergyUtils для 1.21.4 оптимизирована под новейшие версии графических движков. И?справлены конфликты с PBR-материалами и обновлены шейдеры для корректного отображения новых блоков меди и туфа. Рекомендуемая версия для игры на актуальных серверах.
+          </p>
+          <button class="vd-button vd-select-btn">Выбрать</button>
+          <div class="vd-preview">
+            <img class="vd-preview-img" src="../assets/icons/version_preview_1.21.4.png" alt="">
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Info toast for locked versions -->
+      <div class="toast-info" id="toast-info">
+        <div class="toast-info-header">
+          <div class="toast-info-icon">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 1.333A6.667 6.667 0 1 1 1.333 8 6.674 6.674 0 0 1 8 1.333Zm0 1.334A5.333 5.333 0 1 0 13.333 8 5.34 5.34 0 0 0 8 2.667Zm0 2a.667.667 0 0 1 .667.666v3.334a.667.667 0 0 1-1.334 0V5.333A.667.667 0 0 1 8 4.667Zm0 6a.833.833 0 1 1 0 1.666.833.833 0 0 1 0-1.666Z" fill="#8b5cf6"/>
+            </svg>
+          </div>
+          <span class="toast-info-title">Версия недоступна</span>
+        </div>
+        <div class="toast-info-body">
+          У вас нет доступа к бета версии.
+        </div>
+      </div>
+    </div>
+
+    <!-- Popups -->
+    <div class="popup popup-client" id="popup-client">
+
+      <div class="popup-divider"></div>
+      <div class="popup-item" data-action="check-update"><div class="popup-item-icon"><img src="../assets/icons/update.svg" alt=""></div><span class="popup-item-label">Проверка обновлений</span></div>
+      <div class="popup-divider"></div>
+      <div class="popup-item" data-action="open-folder"><div class="popup-item-icon"><img src="../assets/icons/folder.svg" alt=""></div><span class="popup-item-label">Открыть папку</span></div>
+      <div class="popup-item" data-action="open-mods"><div class="popup-item-icon"><img src="../assets/icons/folder.svg" alt=""></div><span class="popup-item-label">Папка с модами</span></div>
+      <div class="popup-divider"></div>
+      <div class="popup-item" data-url="https://help.energyutils.me/"><div class="popup-item-icon"><img src="../assets/icons/link.svg" alt=""></div><span class="popup-item-label">Поддержка</span></div>
+      <div class="popup-item" data-url="https://discord.gg/A6RdtUr2pk"><div class="popup-item-icon"><img src="../assets/icons/link.svg" alt=""></div><span class="popup-item-label">Discord</span></div>
+      <div class="popup-item" data-url="https://t.me/energyutils"><div class="popup-item-icon"><img src="../assets/icons/link.svg" alt=""></div><span class="popup-item-label">Telegram</span></div>
+      <div class="popup-item" data-url="https://energyutils.me"><div class="popup-item-icon"><img src="../assets/icons/link.svg" alt=""></div><span class="popup-item-label">Сайт</span></div>
+      <div class="popup-item" data-url="https://energyutils.me/faq"><div class="popup-item-icon"><img src="../assets/icons/link.svg" alt=""></div><span class="popup-item-label">FAQ</span></div>
+      <div class="popup-divider"></div>
+      <div class="popup-item" data-nav="settings.html"><div class="popup-item-icon"><img src="../assets/icons/settings.svg" alt=""></div><span class="popup-item-label">Настройки</span></div>
+    </div>
+    <div class="popup popup-account" id="popup-account">
+      <div class="popup-item"><div class="popup-item-icon"><img src="../assets/icons/quit.svg" alt=""></div><span class="popup-item-label">Выйти</span></div>
+    </div>
+
+  </div>
+
+  <script>
+    // ── Page transitions ─────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', () => {
+      requestAnimationFrame(() => {
+        document.body.classList.add('ready');
+        window.nativeReady?.().catch(() => {});
+      });
+      hydrateVersions();
+      hydratePillUsername();
+    });
+
+    function applyUserToPill(u) {
+      if (!u) return;
+      const nameEl   = document.querySelector('#account-pill .pill-username');
+      const avatarEl = document.querySelector('#account-pill .avatar-sm');
+      if (nameEl && u.username) nameEl.textContent = u.username;
+      const avatarSrc = u.avatarDataUrl || u.avatarUrl;
+      if (avatarEl && avatarSrc) avatarEl.src = avatarSrc;
+    }
+
+    try {
+      const cached = JSON.parse(localStorage.getItem('rv_user') || 'null');
+      if (cached) applyUserToPill(cached);
+    } catch (_) {}
+
+    async function hydratePillUsername() {
+      try {
+        const s = await window.nativeAuthState?.();
+        const u = s?.user;
+        if (!u) return;
+        try { localStorage.setItem('rv_user', JSON.stringify(u)); } catch (_) {}
+        applyUserToPill(u);
+      } catch (_) {}
+    }
+
+    // Backend versions list — populated from auth response.
+    let backendVersions = [];
+
+    function pickActive(mc) {
+      currentVersion = mc;
+      document.querySelectorAll('.version-card').forEach(c => {
+        c.classList.toggle('active', c.dataset.version === mc);
+      });
+      document.querySelectorAll('.vd-layer').forEach(l => {
+        l.classList.toggle('active', l.dataset.version === mc);
+      });
+    }
+
+    async function hydrateVersions() {
+      try {
+        backendVersions = (await window.nativeGetVersions?.()) || [];
+        const selectedId = await window.nativeGetSelectedVersion?.();
+
+        if (selectedId) {
+          // Map saved id → mc version → which card to highlight.
+          const entry = backendVersions.find(v => v.id === selectedId);
+          if (entry) {
+            const card = document.querySelector(`.version-card[data-version="${entry.version}"]`);
+            // Don't auto-restore selection onto a locked card — that would
+            // leave the UI showing a version the user can't actually launch.
+            // Fall through to the default highlight (1.16.5) in that case.
+            if (card && !card.classList.contains('locked')) {
+              pickActive(entry.version);
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    function navigateTo(url) {
+      window.location.href = url;
+    }
+
+    // ── Window controls ──
+    document.getElementById('btn-hide').addEventListener('click', () => { window.nativeHide?.().catch(() => {}); });
+    document.getElementById('btn-close').addEventListener('click', () => { window.nativeClose?.().catch(() => {}); });
+
+    // ── Drag (top 44px strip) ──
+    // .titlebar visually sits at y=20..44 (after .app's 20px top padding) so a
+    // click in the topmost 20 pixels would otherwise miss the drag handler.
+    // Listen on body and gate by clientY < 44 so the entire top edge grabs.
+    const NODRAG = '#btn-hide,#btn-close,.account-pill,.logo-down,.popup';
+    document.body.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      if (e.clientY > 44) return;
+      if (e.target.closest(NODRAG)) return;
+      window.nativeDragMove?.().catch(() => {});
+    });
+
+    // ── Block right-click context menu ──
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+
+    // ── Account pill ──
+    const accountPill = document.getElementById('account-pill');
+    const pillDown    = accountPill.querySelector('.pill-down');
+
+    // ── Popups ──
+    const popupClient  = document.getElementById('popup-client');
+    const popupAccount = document.getElementById('popup-account');
+    const popupQuit    = document.getElementById('popup-quit');
+    const logoDown     = document.querySelector('.logo-down');
+    const btnQuit      = document.getElementById('btn-quit');
+
+    function closeAllPopups() {
+      popupClient.classList.remove('visible');
+      popupAccount.classList.remove('visible');
+      popupQuit.classList.remove('visible');
+    }
+    logoDown.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const wasOpen = popupClient.classList.contains('visible');
+      closeAllPopups();
+      if (!wasOpen) popupClient.classList.add('visible');
+    });
+    popupClient.addEventListener('click', (e) => {
+      const item = e.target.closest('.popup-item');
+      if (!item) return;
+      e.stopPropagation();
+      closeAllPopups();
+      if (item.dataset.url) {
+        window.nativeOpenUrl?.(item.dataset.url).catch(() => {});
+      } else if (item.dataset.nav) {
+        navigateTo(item.dataset.nav);
+      } else if (item.dataset.action === 'open-folder') {
+        window.nativeOpenFolder?.('').catch(() => {});
+      } else if (item.dataset.action === 'open-mods') {
+        window.nativeOpenUserMods?.().catch(() => {});
+      } else if (item.dataset.action === 'check-update') {
+        navigateTo('dashboard.html');
+      }
+    });
+    pillDown.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const wasOpen = popupAccount.classList.contains('visible');
+      closeAllPopups();
+      if (!wasOpen) popupAccount.classList.add('visible');
+    });
+    btnQuit.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const wasOpen = popupQuit.classList.contains('visible');
+      closeAllPopups();
+      if (!wasOpen) popupQuit.classList.add('visible');
+    });
+    document.getElementById('quit-confirm').addEventListener('click', () => {
+      popupQuit.classList.remove('visible');
+      window.nativeClose?.().catch(() => {});
+    });
+    document.getElementById('quit-cancel').addEventListener('click', () => {
+      popupQuit.classList.remove('visible');
+    });
+    document.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.popup')) return;
+      if (e.target.closest('.logo-down') ||
+          e.target.closest('.pill-down') ||
+          e.target.closest('#btn-quit')) return;
+      closeAllPopups();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeAllPopups();
+    });
+
+    // ── Version selection — parallel crossfade between two pre-rendered layers ──
+    let currentVersion = '1.21.4';
+
+    // Bottom-right info toast for locked versions. Re-clicking restarts the
+    // timer so it stays visible while the user keeps poking the card.
+    const toastInfo = document.getElementById('toast-info');
+    let toastInfoTimer = null;
+    function showLockedToast() {
+      toastInfo.classList.add('visible');
+      if (toastInfoTimer) clearTimeout(toastInfoTimer);
+      toastInfoTimer = setTimeout(() => toastInfo.classList.remove('visible'), 4000);
+    }
+
+    document.querySelectorAll('.version-card').forEach(card => {
+      card.addEventListener('click', () => {
+        if (card.classList.contains('locked')) {
+          showLockedToast();
+          return;
+        }
+        const v = card.dataset.version;
+        if (v === currentVersion) return;
+        pickActive(v);
+      });
+    });
+
+    // ── Save selection on "Выбрать" then return to dashboard ──
+    document.querySelectorAll('.vd-select-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        // The visible vd-layer dictates which mc version we're committing.
+        const layer = btn.closest('.vd-layer');
+        const mc = layer ? layer.dataset.version : currentVersion;
+        // Guard: if somehow the locked layer is showing (shouldn't happen
+        // because click is blocked, but belt-and-suspenders), refuse to save.
+        const card = document.querySelector(`.version-card[data-version="${mc}"]`);
+        if (card && card.classList.contains('locked')) {
+          showLockedToast();
+          return;
+        }
+        const entry = backendVersions.find(v => v.version === mc);
+        if (entry) {
+          try { await window.nativeSetSelectedVersion?.(entry.id); } catch (_) {}
+        }
+        navigateTo('dashboard.html');
+      });
+    });
+  </script>
+</body>
+</html>

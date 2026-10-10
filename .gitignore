@@ -1,0 +1,7 @@
+node_modules/
+release/
+*.log
+.DS_Store
+cpp/build/
+threads/
+inputrc

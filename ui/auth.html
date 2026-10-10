@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EnergyUtils</title>
+  <script src="../assets/scripts/rv-launcher-common.js" defer></script>
+  <script src="../assets/scripts/eu-i18n.js" defer></script>
+  <style>
+    @font-face {
+      font-family: 'Onest';
+      src: url('../assets/fonts/Onest-Regular.ttf') format('truetype');
+      font-weight: 400;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'Onest';
+      src: url('../assets/fonts/Onest-Medium.ttf') format('truetype');
+      font-weight: 500;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'Onest';
+      src: url('../assets/fonts/Onest-SemiBold.ttf') format('truetype');
+      font-weight: 600;
+      font-style: normal;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 1120px;
+      height: 650px;
+      overflow: hidden;
+      background: #141417;
+      font-family: 'Onest', sans-serif;
+      user-select: none;
+    }
+
+    /* Page fade-in / fade-out for transitions.
+       body stays opaque with a dark bg so WebView2's white clear color
+       is never visible — we only fade the inner content. */
+    #app { opacity: 0; transition: opacity 0.22s ease; }
+    body.ready #app { opacity: 1; }
+
+    /* ── Root window card ───────────────────────────────────────────────────── */
+    .app {
+      position: relative;
+      width: 1120px;
+      height: 650px;
+      padding: 20px 24px 24px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+
+      /* wallpaper goes in assets/ at root, see comment below */
+      background:
+        linear-gradient(180deg, rgba(20,20,23,0.95) 0%, #141417 100%),
+        url('../assets/wallpaper_minecraft_mineshaft_2560x1440.png') center/cover no-repeat;
+      border: 1px solid #1C1C20;
+      box-shadow: 0px 34px 58.4px #141417;
+      border-radius: 8px;
+    }
+
+    /* ── Titlebar ────────────────────────────────────────────────────────────── */
+    .titlebar {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      height: 24px;
+      flex-shrink: 0;
+      cursor: default;
+      /* drag region — mousedown on .app triggers nativeDragMove() */
+    }
+
+    /* Logo left side */
+    .logo {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logo-icon {
+      /* ╔══════════════════════════════════════════════════════╗
+         ║  ИКОНКА: assets/icons/logo.svg                      ║
+         ║  Размер: 23.57 × 12 px, цвет #FFFFFF               ║
+         ╚══════════════════════════════════════════════════════╝ */
+      width: 24px;
+      height: 12px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+    }
+    .logo-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+    .logo-text {
+      font-weight: 500;
+      font-size: 12px;
+      line-height: 15px;
+      color: #FFFFFF;
+    }
+
+    /* Window controls right side */
+    .window-controls {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-wc {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border: none;
+      background: none;
+      padding: 0;
+    }
+    .btn-wc img {
+      width: 100%; height: 100%; display: block;
+      filter: brightness(0) invert(0.4);
+      transition: filter 0.15s;
+    }
+    .btn-wc:hover img  { filter: brightness(0) invert(1); }
+    .btn-wc:active img { filter: brightness(0) invert(0.7); }
+
+    /* ── Content (centered vertically + horizontally) ───────────────────────── */
+    .content {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      flex: 1;
+      width: 100%;
+    }
+
+    /* Auth panel — 454 px wide column */
+    .auth-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      width: 454px;
+    }
+
+    /* Heading block */
+    .heading-group {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+      width: 100%;
+    }
+
+    .heading-title {
+      width: 100%;
+      font-weight: 600;
+      font-size: 24px;
+      line-height: 31px;
+      text-align: center;
+      color: #FFFFFF;
+    }
+
+    .heading-subtitle {
+      width: 100%;
+      font-weight: 500;
+      font-size: 15px;
+      line-height: 19px;
+      text-align: center;
+      color: #656571;
+    }
+
+    /* Dark card */
+    .form-card {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 24px;
+      gap: 16px;
+      width: 100%;
+      background: #141417;
+      border-radius: 12px;
+    }
+
+    /* Orange login button */
+    .btn-login {
+      display: flex;
+      flex-direction: row;
+      justify-content: center;
+      align-items: center;
+      gap: 4px;
+      padding: 12px 16px;
+      width: 100%;
+      height: 40px;
+      background: #8b5cf6;
+      box-shadow: 0px 5px 16px rgba(139,92,246,0.34);
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-login:hover  { background: #7c3aed; }
+    .btn-login:active { background: #7c3aed; }
+
+    .btn-login-text {
+      font-weight: 500;
+      font-size: 12px;
+      line-height: 15px;
+      color: #FFFFFF;
+    }
+
+    .btn-login-icon {
+      /* ╔══════════════════════════════════════════════════════╗
+         ║  ИКОНКА: assets/icons/login.svg                     ║
+         ║  Размер: 16 × 16 px, цвет #FFFFFF                  ║
+         ╚══════════════════════════════════════════════════════╝ */
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+    }
+    .btn-login-icon img { width: 100%; height: 100%; display: block; }
+
+    /* Bottom links row — left: "Нет аккаунта? Регистрация"  right: "Забыли пароль?" */
+    .auth-links {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: baseline;
+      width: 100%;
+    }
+
+    .auth-links-left {
+      display: flex;
+      flex-direction: row;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .auth-links-label {
+      font-weight: 500;
+      font-size: 12px;
+      color: #656571;
+    }
+
+    .auth-links-action {
+      font-weight: 500;
+      font-size: 12px;
+      color: #FFFFFF;
+      cursor: pointer;
+      text-decoration: underline;
+      text-decoration-color: transparent;
+      text-underline-offset: 3px;
+      transition: color 0.15s, text-decoration-color 0.15s;
+    }
+    .auth-links-action:hover {
+      color: #8b5cf6;
+      text-decoration-color: #8b5cf6;
+    }
+
+    /* ── Footer ──────────────────────────────────────────────────────────────── */
+    .app-footer {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      flex-shrink: 0;
+    }
+
+    .footer-meta {
+      font-weight: 500;
+      font-size: 10px;
+      color: #656571;
+      opacity: 0.3;
+    }
+
+    /* ── Loading overlay (shown on login) ─────────────────────────────────── */
+    .content { position: relative; }
+
+    .auth-panel {
+      transition: filter 0.25s ease;
+    }
+    .heading-group,
+    .btn-login,
+    .auth-links {
+      transition: opacity 0.25s ease;
+    }
+    .content.loading .auth-panel { filter: blur(2px); pointer-events: none; }
+    .content.loading .heading-group,
+    .content.loading .btn-login,
+    .content.loading .auth-links { opacity: 0.1; }
+
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+      z-index: 10;
+    }
+    .content.loading .loading-overlay {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .loading-spinner {
+      position: relative;
+      width: 48px;
+      height: 48px;
+      animation: rv-spin 1s linear infinite;
+    }
+    .loading-spinner svg {
+      display: block;
+      width: 48px;
+      height: 48px;
+    }
+
+    @keyframes rv-spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+
+    <!-- ── Titlebar ─────────────────────────────────────────────────────────── -->
+    <div class="titlebar">
+      <div class="logo">
+        <div class="logo-icon">
+          <!-- Иконка: ../assets/icons/logo.svg -->
+          <img src="../assets/icons/logo.svg" alt="">
+        </div>
+        <span class="logo-text">EnergyUtils</span>
+      </div>
+
+      <div class="window-controls">
+        <!-- Иконка minimize: ../assets/icons/hide.svg -->
+        <button class="btn-wc" id="btn-hide" title="Свернуть">
+          <img src="../assets/icons/hide.svg" alt="Hide">
+        </button>
+        <!-- Иконка close: ../assets/icons/close.svg -->
+        <button class="btn-wc" id="btn-close" title="Закрыть">
+          <img src="../assets/icons/close.svg" alt="Close">
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Main content ──────────────────────────────────────────────────────── -->
+    <div class="content" id="content">
+      <div class="auth-panel">
+
+        <div class="heading-group">
+          <h1 class="heading-title">Добро пожаловать!</h1>
+          <p class="heading-subtitle">Вход в аккаунт EnergyUtils</p>
+        </div>
+
+        <div class="form-card">
+          <button class="btn-login" id="btn-login">
+            <span class="btn-login-text">Войти через сайт</span>
+            <div class="btn-login-icon">
+              <!-- Иконка: ../assets/icons/login.svg -->
+              <img src="../assets/icons/login.svg" alt="">
+            </div>
+          </button>
+
+          <div class="auth-links">
+            <div class="auth-links-left">
+              <span class="auth-links-label">Нет аккаунта?</span>
+              <a class="auth-links-action" id="btn-register">Регистрация</a>
+            </div>
+            <a class="auth-links-action" id="btn-forgot">Забыли пароль?</a>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Loading overlay (shown after Войти через сайт) -->
+      <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-spinner">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="22" y="5" width="4" height="8" rx="2" fill="white"/>
+            <rect x="5" y="26" width="4" height="8" rx="2" transform="rotate(-90 5 26)" fill="#1C1C20"/>
+            <rect x="26" y="43" width="4" height="8" rx="2" transform="rotate(180 26 43)" fill="#1C1C20"/>
+            <rect x="43" y="22" width="4" height="8" rx="2" transform="rotate(90 43 22)" fill="#1C1C20"/>
+            <rect x="9.44531" y="12.2734" width="4" height="7.99788" rx="2" transform="rotate(-45 9.44531 12.2734)" fill="#1C1C20"/>
+            <rect x="12.2695" y="38.5586" width="4" height="8.00335" rx="2" transform="rotate(-135 12.2695 38.5586)" fill="#1C1C20"/>
+            <rect x="38.5532" y="35.7251" width="4" height="7.99592" rx="2" transform="rotate(135 38.5532 35.7251)" fill="#1C1C20"/>
+            <rect x="35.7285" y="9.44336" width="4" height="8.00068" rx="2" transform="rotate(45 35.7285 9.44336)" fill="#1C1C20"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Footer ───────────────────────────────────────────────────────────── -->
+    <div class="app-footer">
+      <span class="footer-meta js-rv-client-version">Client Version: <span class="rv-skel" style="display:inline-block;width:40px;height:9px;vertical-align:middle;"></span></span>
+      <span class="footer-meta">© EnergyUtils 2026</span>
+    </div>
+
+  </div>
+
+  <script>
+    // ── Page transitions ─────────────────────────────────────────────────────
+    // DOMContentLoaded + rAF: fire after first paint (fonts/images can lag).
+    document.addEventListener('DOMContentLoaded', () => {
+      requestAnimationFrame(() => {
+        document.body.classList.add('ready');
+        window.nativeReady?.().catch(() => {});
+      });
+    });
+    function navigateTo(url) {
+      window.location.href = url;
+    }
+
+    // ── Window controls ──────────────────────────────────────────────────────
+    document.getElementById('btn-hide').addEventListener('click', () => {
+      window.nativeHide?.().catch(() => {});
+    });
+
+    document.getElementById('btn-close').addEventListener('click', () => {
+      window.nativeClose?.().catch(() => {});
+    });
+
+    // ── Drag (top 44px strip) ──
+    // .titlebar visually sits at y=20..44 (after .app's 20px top padding) so a
+    // click in the topmost 20 pixels would otherwise miss the drag handler.
+    // Listen on body and gate by clientY < 44 so the entire top edge grabs.
+    const NODRAG_SELECTORS = '#btn-hide, #btn-close';
+
+    document.body.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      if (e.clientY > 44) return;
+      if (e.target.closest(NODRAG_SELECTORS)) return;
+      // Tell C++ to start native drag (WM_NCLBUTTONDOWN HTCAPTION)
+      window.nativeDragMove?.().catch(() => {});
+    });
+
+    // ── Block right-click context menu ──
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // ── Auth actions ─────────────────────────────────────────────────────────
+    const content   = document.getElementById('content');
+    const btnLogin  = document.getElementById('btn-login');
+    let loggingIn   = false;
+
+    function resetLoginUi() {
+      loggingIn = false;
+      btnLogin.disabled = false;
+      content.classList.remove('loading');
+    }
+
+    async function pollAuthState() {
+      try {
+        const s = await window.nativeAuthState();
+        if (s && s.state === 'confirmed') {
+          if (s.user) {
+            if (s.user.avatarUrl) {
+              try {
+                const dataUrl = await window.nativeFetchAvatar?.(s.user.avatarUrl);
+                if (dataUrl) s.user.avatarDataUrl = dataUrl;
+              } catch (_) {}
+            }
+            const userJson = JSON.stringify(s.user);
+            try { localStorage.setItem('rv_user', userJson); } catch (_) {}
+            try { await window.nativeStashCache?.(userJson); } catch (_) {}
+          }
+          navigateTo('dashboard.html');
+          return;
+        }
+        if (s && s.state === 'failed') {
+          resetLoginUi();
+          alert('Авторизация не удалась. Попробуй ещё раз.');
+          return;
+        }
+        setTimeout(pollAuthState, 1000);
+      } catch (e) {
+        setTimeout(pollAuthState, 1500);
+      }
+    }
+
+    btnLogin.addEventListener('click', async () => {
+      if (loggingIn) return;
+      loggingIn = true;
+      btnLogin.disabled = true;
+      content.classList.add('loading');
+
+      try {
+        await window.nativeAuthStart();
+        setTimeout(pollAuthState, 1000);
+      } catch (e) {
+        resetLoginUi();
+      }
+    });
+
+    document.getElementById('btn-register').addEventListener('click', () => {
+      console.log('register');
+    });
+
+    document.getElementById('btn-forgot').addEventListener('click', () => {
+      console.log('forgot');
+    });
+  </script>
+</body>
+</html>

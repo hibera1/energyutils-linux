@@ -1,0 +1,2497 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>EnergyUtils</title>
+  <script src="../assets/scripts/rv-launcher-common.js" defer></script>
+  <script src="../assets/scripts/eu-i18n.js" defer></script>
+  <style>
+    @font-face {
+      font-family: 'Onest';
+      src: url('../assets/fonts/Onest-Regular.ttf') format('truetype');
+      font-weight: 400; font-style: normal;
+    }
+    @font-face {
+      font-family: 'Onest';
+      src: url('../assets/fonts/Onest-Medium.ttf') format('truetype');
+      font-weight: 500; font-style: normal;
+    }
+    @font-face {
+      font-family: 'Onest';
+      src: url('../assets/fonts/Onest-SemiBold.ttf') format('truetype');
+      font-weight: 600; font-style: normal;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    ::-webkit-scrollbar { display: none; }
+
+    html, body {
+      width: 1120px; height: 650px;
+      overflow: hidden;
+      background: #141417;
+      font-family: 'Onest', sans-serif;
+      user-select: none;
+    }
+
+    /* Page fade-in / fade-out for transitions.
+       Only the content fades — titlebar and sidebar stay put so switching
+       tabs feels like updating an inner region, not reloading the window. */
+    .main-content > *:not(.sidebar):not(.popup):not(.toast-error):not(.state-overlay):not(.state-toast) {
+      opacity: 0;
+      transition: opacity 0.22s ease, filter 0.22s ease;
+    }
+    body.ready .main-content > *:not(.sidebar):not(.popup):not(.toast-error):not(.state-overlay):not(.state-toast) {
+      opacity: 1;
+    }
+
+    /* ── App root ── */
+    .app {
+      width: 1120px; height: 650px;
+      padding: 20px 24px 24px 24px;
+      display: flex; flex-direction: column; gap: 18px;
+      background: #141417;
+      border: 1px solid #1C1C20;
+      box-shadow: 0 34px 58.4px #141417;
+      border-radius: 8px;
+    }
+
+    /* ── Titlebar ── */
+    .titlebar {
+      display: flex; flex-direction: row;
+      justify-content: space-between; align-items: center;
+      width: 100%; height: 24px; flex-shrink: 0;
+    }
+    .titlebar-left  { display: flex; align-items: center; gap: 24px; }
+    .titlebar-right { display: flex; align-items: center; gap: 24px; }
+
+    /* Logo + chevron */
+    .logo { display: flex; align-items: center; gap: 8px; }
+    .logo-icon {
+      width: 24px; height: 12px;
+      display: flex; align-items: center; flex-shrink: 0;
+    }
+    .logo-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .logo-text  { font-weight: 500; font-size: 12px; color: #FFFFFF; }
+    .logo-down  {
+      width: 12px; height: 12px; display: flex; align-items: center;
+      flex-shrink: 0; cursor: pointer;
+    }
+    .logo-down img { width: 100%; height: 100%; filter: brightness(0) invert(0.4); transition: filter 0.15s; }
+    .logo-down:hover img { filter: brightness(0) invert(1); }
+
+    /* Online status */
+    /* Account pill */
+    .account-pill {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 8px; height: 24px;
+      background: #18181C; border-radius: 4px; cursor: pointer;
+    }
+    .pill-info  { display: flex; align-items: center; gap: 4px; }
+    .pill-username { font-weight: 500; font-size: 13px; color: #D8D8D8; }
+    .pill-dot { width: 6px; height: 6px; background: #14CF7E; border-radius: 50%; flex-shrink: 0; }
+    .pill-down { width: 12px; height: 12px; display: flex; align-items: center; cursor: pointer; }
+    .pill-down img { width: 100%; height: 100%; filter: brightness(0) invert(0.4); transition: filter 0.15s; }
+    .pill-down:hover img { filter: brightness(0) invert(1); }
+
+    /* Window controls */
+    .window-controls { display: flex; align-items: center; gap: 8px; }
+    .btn-wc {
+      width: 24px; height: 24px;
+      display: flex; align-items: center; justify-content: center;
+      border: none; background: none; padding: 0; cursor: pointer;
+    }
+    .btn-wc img {
+      width: 100%; height: 100%; display: block;
+      filter: brightness(0) invert(0.4);
+      transition: filter 0.15s;
+    }
+    .btn-wc:hover img  { filter: brightness(0) invert(1); }
+    .btn-wc:active img { filter: brightness(0) invert(0.7); }
+
+    /* ── Main layout ── */
+    .main-content {
+      display: flex; flex-direction: row;
+      gap: 12px; flex: 1; min-height: 0;
+      position: relative;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 56px; flex-shrink: 0;
+      display: flex; flex-direction: column;
+      justify-content: space-between;
+      overflow: visible; /* labels may overflow */
+      margin-left: -12px;
+    }
+    .nav-top { display: flex; flex-direction: column; gap: 4px; }
+
+    .nav-btn {
+      position: relative;
+      width: 56px; height: 56px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      border-radius: 12px; border: none; background: none;
+      padding: 12px 16px;
+      cursor: pointer;
+      overflow: hidden;
+      transition: padding 0.18s ease;
+    }
+    /* Active: bg stays, no hover effect, no cursor change */
+    .nav-btn.active {
+      background: #18181C;
+      cursor: default;
+    }
+
+    .nav-btn img {
+      width: 24px; height: 24px; display: block; flex-shrink: 0;
+      filter: brightness(0) invert(0.4);
+      transition: transform 0.18s ease, filter 0.18s ease;
+      position: relative; z-index: 1;
+    }
+    /* Active icon — orange via CSS filter */
+    .nav-btn.active img {
+      filter: brightness(0) saturate(200%) invert(55%) sepia(90%)
+              saturate(800%) hue-rotate(230deg) brightness(105%);
+    }
+
+    /* Nav label (hidden by default, appears on hover) */
+    .nav-label {
+      position: absolute;
+      bottom: 8px;
+      left: 50%; transform: translateX(-50%) translateY(120%);
+      opacity: 0;
+      font-weight: 500; font-size: 11px; color: #656571;
+      white-space: nowrap;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Hover on NON-active nav buttons */
+    .nav-btn:not(.active):hover {
+      padding: 8px 16px; /* reduce top+bottom, makes room for label */
+    }
+    .nav-btn:not(.active):hover img {
+      transform: translateY(-6px);
+      filter: brightness(0) invert(1);
+    }
+    .nav-btn:not(.active):hover .nav-label {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Quit button — slides left and turns red on hover, no label */
+    .nav-btn.nav-quit:hover { padding: 12px 16px; }
+    .nav-btn.nav-quit:hover img {
+      transform: translateX(-3px);
+      filter: brightness(0) saturate(100%) invert(56%) sepia(93%)
+              saturate(2605%) hue-rotate(324deg) brightness(104%) contrast(102%);
+    }
+
+    /* ── Center panel ── */
+    .center-panel {
+      flex: 1; min-width: 0;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+
+    /* Quick launch */
+    .quick-launch {
+      height: 56px; flex-shrink: 0;
+      display: flex; align-items: center;
+      padding: 12px 0 12px 12px; gap: 16px;
+      background: #151517;
+      border: 1px solid #1C1C20;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    /* Браузерный [hidden] {display:none} проигрывает .quick-launch {display:flex}
+       по специфичности. Явное правило возвращает корректное поведение. */
+    .quick-launch[hidden] { display: none; }
+    .ql-label { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .ql-label img { width: 24px; height: 24px; filter: brightness(0) invert(0.4); }
+    .ql-label-text { font-weight: 500; font-size: 13px; color: #FFFFFF; white-space: nowrap; }
+    .ql-divider { width: 1px; height: 32px; background: rgba(101,101,113,0.2); flex-shrink: 0; }
+    .ql-servers {
+      display: flex; align-items: center; gap: 12px;
+      overflow-x: scroll; flex: 1;
+    }
+
+    .server-pill {
+      display: flex; align-items: center; gap: 4px;
+      padding: 4px 8px; height: 32px;
+      background: #18181C; border-radius: 4px;
+      cursor: pointer; flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .server-pill:hover { background: #1C1C20; }
+    .server-pill:hover .server-name { color: #FFFFFF; }
+
+    .server-icon {
+      width: 16px; height: 16px;
+      border-radius: 2px; object-fit: cover;
+      flex-shrink: 0;
+    }
+    .server-name { font-weight: 500; font-size: 13px; color: #D8D8D8; white-space: nowrap; transition: color 0.15s; }
+
+    /* Game card */
+    .game-card {
+      position: relative;
+      flex: 1; min-height: 0;
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .game-card-bg {
+      position: absolute; inset: 0;
+      background: url('../assets/icons/launch_bg.jpg') center/cover no-repeat;
+      transform: translateY(0) scale(1);
+      transition: transform 0.45s ease;
+      z-index: 0;
+    }
+    .game-card-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(180deg, rgba(20,20,23,0.7) 0%, #141417 100%);
+      pointer-events: none;
+      z-index: 1;
+    }
+    .game-card-content {
+      position: relative; z-index: 2;
+      height: 100%;
+      display: flex; align-items: flex-end;
+      justify-content: space-between;
+      padding: 12px;
+      transform: translateY(0);
+      transition: transform 0.45s ease;
+    }
+    .game-card:hover .game-card-bg {
+      transform: translateY(-6px) scale(1.04);
+    }
+    .game-card:hover .game-card-content {
+      transform: translateY(-4px);
+    }
+    .game-info { display: flex; flex-direction: column; gap: 16px; }
+    .game-version-row { display: flex; align-items: center; gap: 12px; }
+    .game-icon { width: 32px; height: 32px; object-fit: contain; }
+    .game-title-text { font-weight: 600; font-size: 32px; line-height: 1; color: #FFFFFF; }
+    .game-down-icon {
+      width: 12px; height: 12px;
+      display: flex; align-items: center;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+    .game-down-icon img {
+      width: 100%; height: 100%;
+      filter: brightness(0) invert(1);
+      transition: filter 0.2s ease;
+    }
+    .game-down-icon:hover { transform: translateY(2px); }
+    .game-down-icon:hover img { filter: brightness(0) invert(0.4); }
+    .game-meta { display: flex; align-items: center; gap: 16px; }
+    .meta-updated { font-weight: 500; font-size: 11px; color: #D8D8D8; }
+    .meta-played  { font-weight: 500; font-size: 11px; color: #656571; }
+
+    .btn-launch {
+      width: 281px; height: 64px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: #8b5cf6;
+      box-shadow: 0 6px 46px rgba(139,92,246,0.44);
+      border-radius: 12px; border: none; cursor: pointer;
+      font-family: 'Onest', sans-serif;
+      font-weight: 600; font-size: 20px; color: #FFFFFF;
+      transition: background 0.15s, box-shadow 0.15s, color 0.15s;
+    }
+    .btn-launch:hover { background: #7c3aed; }
+    .btn-launch.disabled,
+    .btn-launch:disabled {
+      background: #2A2A2F;
+      box-shadow: none;
+      color: #6B6B73;
+      cursor: not-allowed;
+    }
+    .btn-launch.disabled:hover,
+    .btn-launch:disabled:hover { background: #2A2A2F; }
+
+    /* News section */
+    .news-section {
+      flex: 1; min-height: 0;
+      display: flex; flex-direction: column; gap: 8px;
+      padding: 12px;
+      background: #151517;
+      border: 1px solid #1C1C20;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .section-header { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .section-header img { width: 16px; height: 16px; }
+    .section-header-text { font-weight: 500; font-size: 14px; color: #FFFFFF; }
+
+    .news-list {
+      display: flex; align-items: stretch; gap: 12px;
+      overflow-x: scroll; flex: 1;
+    }
+
+    .news-card {
+      width: 184px; flex-shrink: 0;
+      display: flex; flex-direction: column;
+      justify-content: flex-end; align-items: flex-start;
+      padding: 12px; gap: 8px;
+      border-radius: 8px; overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(20,20,23,0.7) 0%, #141417 100%),
+        var(--news-bg, #1C1C20) center/cover no-repeat;
+      cursor: pointer;
+    }
+
+    .news-badge {
+      width: 62px; height: 15px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 2px;
+      background: rgba(139,92,246,0.2);
+      backdrop-filter: blur(8px);
+      flex-shrink: 0;
+    }
+    .news-date  { font-weight: 500; font-size: 10px; color: #8b5cf6; }
+    .news-title { font-weight: 500; font-size: 14px; color: #FFFFFF; align-self: stretch; }
+    .news-desc  { font-weight: 500; font-size: 11px; color: #656571; align-self: stretch; line-height: 14px; }
+
+    .section-footer {
+      display: flex; justify-content: space-between; align-items: center;
+      flex-shrink: 0;
+    }
+    .footer-meta { font-weight: 500; font-size: 10px; color: #656571; opacity: 0.3; }
+
+    /* ── Right panel ── */
+    .right-panel {
+      width: 295px; flex-shrink: 0;
+      display: flex; flex-direction: column; gap: 12px;
+      position: relative;
+    }
+
+    /* Account info card — togglable */
+    .account-info-card {
+      display: flex; flex-direction: column;
+      align-items: center; padding: 12px; gap: 16px;
+      border-radius: 12px 12px 0 0;
+      height: 238px; flex-shrink: 0;
+      overflow: hidden;
+      transition: height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+      opacity: 1;
+    }
+
+    .avatar-wrap { flex: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
+    .avatar-large {
+      width: 144px; height: 144px;
+      border-radius: 50%; object-fit: cover;
+      background: #1C1C20;
+    }
+    .subscription-card {
+      width: 265px; height: 54px; flex-shrink: 0;
+      display: flex; flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 4px;
+      padding: 0 12px;
+      background: #151517;
+      border: 1px solid #1C1C20;
+      border-radius: 12px;
+    }
+    .sub-username    { font-weight: 500; font-size: 14px; line-height: 18px; color: #FFFFFF; }
+    .sub-status-row  { display: flex; align-items: center; gap: 4px; }
+    .sub-dot         { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: #14CF7E; }
+    .sub-active-text { font-weight: 500; font-size: 12px; line-height: 15px; color: #14CF7E; }
+    .sub-sep         { width: 4px; height: 4px; border-radius: 50%; background: #656571; opacity: 0.4; flex-shrink: 0; }
+    .sub-expire-text { font-weight: 500; font-size: 12px; line-height: 15px; color: #656571; }
+
+    /* Updates card */
+    .updates-card {
+      flex: 1; min-height: 0;
+      display: flex; flex-direction: column; gap: 8px;
+      padding: 12px;
+      background: #151517;
+      border: 1px solid #1C1C20;
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+      transition: flex 0.3s ease;
+    }
+    .updates-list {
+      display: flex; flex-direction: column; gap: 8px;
+      overflow-y: scroll; flex: 1;
+    }
+    .update-item {
+      display: flex; align-items: flex-start;
+      padding: 12px; gap: 8px;
+      background: #18181C; border-radius: 12px; flex-shrink: 0;
+    }
+    .update-item-icon { width: 12px; height: 12px; margin-top: 2px; flex-shrink: 0; }
+    .update-item-icon img { width: 100%; height: 100%; filter: brightness(0) invert(0.4); }
+    .update-content { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+    .update-title { font-weight: 500; font-size: 12px; color: #FFFFFF; }
+    .update-desc  { font-weight: 500; font-size: 11px; color: #656571; line-height: 14px; }
+
+    .updates-fade {
+      position: absolute; bottom: 0; left: 0; right: 0; height: 37px;
+      background: linear-gradient(180deg, rgba(21,21,23,0) 0%, #151517 100%);
+      pointer-events: none;
+    }
+
+    /* ── Skeleton placeholders (показываются пока данные грузятся) ── */
+    @keyframes rv-skel-shimmer {
+      0%   { background-position: -200px 0; }
+      100% { background-position: calc(200px + 100%) 0; }
+    }
+    .rv-skel {
+      background: linear-gradient(
+        90deg,
+        #1C1C20 0%,
+        #26262B 50%,
+        #1C1C20 100%
+      );
+      background-size: 200px 100%;
+      background-repeat: no-repeat;
+      animation: rv-skel-shimmer 1.4s ease-in-out infinite;
+      border-radius: 4px;
+      color: transparent;
+      user-select: none;
+      pointer-events: none;
+    }
+    .news-card.rv-skel-card {
+      background: #18181C;
+      cursor: default;
+      pointer-events: none;
+    }
+    .news-card.rv-skel-card .news-badge {
+      background: #1C1C20;
+    }
+    .news-card.rv-skel-card .news-badge,
+    .news-card.rv-skel-card .news-title,
+    .news-card.rv-skel-card .news-desc {
+      animation: rv-skel-shimmer 1.4s ease-in-out infinite;
+      background: linear-gradient(90deg, #1C1C20 0%, #26262B 50%, #1C1C20 100%);
+      background-size: 200px 100%;
+      color: transparent;
+    }
+    .news-card.rv-skel-card .news-title {
+      height: 14px; width: 70%; border-radius: 4px;
+    }
+    .news-card.rv-skel-card .news-desc {
+      height: 11px; width: 100%; border-radius: 4px;
+    }
+    .news-card.rv-skel-card .news-desc + .news-desc {
+      width: 85%; margin-top: 0;
+    }
+    .update-item.rv-skel-row {
+      pointer-events: none;
+    }
+    .update-item.rv-skel-row .update-title,
+    .update-item.rv-skel-row .update-desc {
+      animation: rv-skel-shimmer 1.4s ease-in-out infinite;
+      background: linear-gradient(90deg, #1C1C20 0%, #26262B 50%, #1C1C20 100%);
+      background-size: 200px 100%;
+      color: transparent;
+      border-radius: 4px;
+    }
+    .update-item.rv-skel-row .update-title { height: 12px; width: 55%; }
+    .update-item.rv-skel-row .update-desc  { height: 11px; width: 100%; }
+    .meta-updated.rv-skel {
+      display: inline-block;
+      width: 142px; height: 11px;
+      vertical-align: middle;
+    }
+    .rv-empty-text {
+      width: 100%;
+      padding: 8px 4px;
+      font-weight: 500; font-size: 11px;
+      color: #656571;
+      text-align: center;
+      align-self: center;
+    }
+
+    /* ── Popups ── */
+    .popup {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      padding: 12px; gap: 8px;
+      background: #151517;
+      border: 1px solid #1C1C20;
+      box-shadow: 0 34px 58.4px #141417;
+      border-radius: 8px;
+      z-index: 100;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.18s ease, visibility 0s linear 0.18s;
+    }
+    .popup.visible {
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 0.18s ease, visibility 0s linear 0s;
+    }
+
+    /* Client popup — under logo chevron */
+    .popup-client {
+      width: 234px;
+      top: 56px;
+      left: 24px;
+    }
+    /* Account popup — under pill chevron */
+    .popup-account {
+      width: 167px;
+      top: 56px;
+      right: 80px;
+    }
+
+    .popup-item {
+      display: flex; flex-direction: row; align-items: center;
+      padding: 8px; gap: 8px;
+      border-radius: 4px; cursor: pointer;
+      transition: background 0.12s;
+    }
+    .popup-item:hover { background: #18181C; }
+    .popup-item-icon { width: 16px; height: 16px; flex-shrink: 0; }
+    .popup-item-icon img {
+      width: 100%; height: 100%;
+      filter: brightness(0) invert(0.4);
+      transition: filter 0.12s;
+    }
+    .popup-item:hover .popup-item-icon img { filter: brightness(0) invert(0.85); }
+    .popup-item-product { cursor: default; opacity: 0.55; }
+    .popup-item-product:hover { background: transparent; }
+    .popup-item.popup-item-product .popup-item-icon img { filter: none; }
+    .popup-item-label {
+      flex: 1;
+      font-weight: 500; font-size: 13px; color: #D8D8D8;
+    }
+
+    .popup-divider {
+      height: 1px; width: 100%;
+      background: #656571; opacity: 0.2;
+      margin: 0;
+    }
+
+    /* Quit confirmation popup — anchored next to the quit button */
+    .popup-quit {
+      width: 234px;
+      bottom: 0;
+      left: 68px;
+      padding: 16px;
+      gap: 16px;
+    }
+    .popup-quit-header {
+      display: flex; align-items: center;
+      gap: 8px; width: 100%;
+    }
+    .popup-quit-icon { width: 16px; height: 16px; flex-shrink: 0; }
+    .popup-quit-icon img {
+      width: 100%; height: 100%;
+      filter: brightness(0) saturate(100%) invert(56%) sepia(93%)
+              saturate(2605%) hue-rotate(324deg) brightness(104%) contrast(102%);
+    }
+    .popup-quit-title {
+      font-weight: 500; font-size: 15px; line-height: 19px;
+      color: #FFFFFF;
+    }
+    .popup-quit-desc {
+      font-weight: 500; font-size: 13px; line-height: 17px;
+      color: #656571;
+      width: 100%;
+    }
+    .popup-quit-actions {
+      display: flex; flex-direction: row;
+      gap: 8px; width: 100%;
+    }
+    .popup-quit-actions button {
+      padding: 8px 12px;
+      height: 33px;
+      border: none; background: transparent;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: 'Onest', sans-serif;
+      font-weight: 500; font-size: 13px; line-height: 17px;
+      color: #D8D8D8;
+      transition: background 0.12s ease, color 0.12s ease;
+    }
+    .popup-quit-confirm { flex: 1; }
+    .popup-quit-confirm:hover { background: #1C1C20; color: #FF6363; }
+    .popup-quit-cancel  { flex-shrink: 0; }
+    .popup-quit-cancel:hover { background: #18181C; color: #FFFFFF; }
+
+    /* ── Launch / Patch / Error states ─────────────────────────────────── */
+
+    .state-overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      overflow: hidden;
+      border-radius: 12px;
+    }
+    .app.state-launching    #overlay-launch,
+    .app.state-patching     #overlay-patch,
+    .app.state-error        #overlay-error,
+    .app.state-noaccess     #overlay-noaccess,
+    .app.state-disconnected #overlay-disconnected,
+    .app.state-techworks    #overlay-techworks { display: flex; }
+
+    /* Hide sidebar + heavily dim content during launch/patch */
+    .app.state-launching .sidebar,
+    .app.state-patching  .sidebar { visibility: hidden; }
+    body.ready .app.state-launching .main-content > *:not(.sidebar):not(.popup):not(.state-overlay):not(.state-toast),
+    body.ready .app.state-patching  .main-content > *:not(.sidebar):not(.popup):not(.state-overlay):not(.state-toast) {
+      filter: blur(12px);
+      opacity: 0.04;
+      pointer-events: none;
+    }
+
+    /* Modal states — hide dashboard entirely + hide sidebar.
+       The overlay itself has a solid #141417 background, so it IS the
+       screen (no main menu visible behind). */
+    .app.state-error        .sidebar,
+    .app.state-noaccess     .sidebar,
+    .app.state-disconnected .sidebar,
+    .app.state-techworks    .sidebar { visibility: hidden; }
+
+    body.ready .app.state-error        .main-content > *:not(.popup):not(.state-overlay):not(.state-toast),
+    body.ready .app.state-noaccess     .main-content > *:not(.popup):not(.state-overlay):not(.state-toast),
+    body.ready .app.state-disconnected .main-content > *:not(.popup):not(.state-overlay):not(.state-toast),
+    body.ready .app.state-techworks    .main-content > *:not(.popup):not(.state-overlay):not(.state-toast) {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* Modal overlays render on their own dark surface — the dashboard is
+       hidden, these screens stand alone. */
+    #overlay-error,
+    #overlay-noaccess,
+    #overlay-disconnected,
+    #overlay-techworks {
+      background: #141417;
+    }
+
+    /* ── Launch card (common with patch) ── */
+    .launch-card {
+      display: flex; flex-direction: column;
+      align-items: center;
+      gap: 32px;
+      width: 478px;
+    }
+    .launch-badges { display: flex; flex-direction: row; gap: 8px; }
+    .badge {
+      display: flex; align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      height: 24px;
+      border-radius: 4px;
+      backdrop-filter: blur(8px);
+      font-weight: 500; font-size: 13px; line-height: 17px;
+    }
+    .badge img { width: 16px; height: 16px; }
+    .badge-version { background: rgba(139, 92, 246, 0.3); color: #8b5cf6; }
+    .badge-fabric  { background: rgba(255, 255, 255, 0.3); color: #FFFFFF; }
+    .badge-error   { background: rgba(255, 99, 99, 0.3);  color: #FF6363; }
+    .badge-orange  { background: rgba(139, 92, 246, 0.3); color: #8b5cf6; }
+
+    .launch-title {
+      font-weight: 600; font-size: 24px; line-height: 1;
+      color: #FFFFFF;
+      text-align: center;
+    }
+    .launch-progress {
+      display: flex; flex-direction: column;
+      gap: 16px;
+      width: 100%;
+    }
+    .launch-status {
+      font-weight: 400; font-size: 13px; line-height: 17px;
+      color: #D8D8D8;
+      opacity: 0.6;
+    }
+    .launch-bar-track {
+      width: 100%; height: 24px;
+      background: #1C1C20;
+      border: 1px solid rgba(101, 101, 113, 0.1);
+      border-radius: 16px;
+      padding: 4px;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    .launch-bar-fill {
+      height: 100%;
+      width: 4%;
+      background: #8b5cf6;
+      box-shadow: 0 0 128px #8b5cf6, 0 4px 4px #141417;
+      border-radius: 16px;
+      transition: width 0.5s ease;
+    }
+    .launch-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      font-weight: 400; font-size: 11px; line-height: 14px;
+      color: #656571;
+    }
+    .launch-meta > span { flex: 1; }
+    .launch-meta > .sep { flex: 0 0 3px; opacity: 0.2; }
+    .launch-meta > .meta-right { text-align: right; }
+
+    .launch-cancel {
+      padding: 12px 16px;
+      height: 40px;
+      background: transparent;
+      border: 1px solid #1C1C20;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: 'Onest', sans-serif;
+      font-weight: 500; font-size: 12px; line-height: 15px;
+      color: #656571;
+      transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+    .launch-cancel:hover {
+      color: #FFFFFF;
+      border-color: #303037;
+      background: #18181C;
+    }
+
+    /* ── Launcher self-update overlay ───────────────────────────────────── */
+    /* Reuses launch-card visuals; this just unhides + theme-matches the
+       error/maintenance overlays (solid dark backdrop, no dashboard behind). */
+    #overlay-update { background: #141417; }
+    #overlay-update .launch-card { gap: 12px; }
+    .app.state-updating #overlay-update { display: flex; }
+    .app.state-updating .sidebar { visibility: hidden; }
+    body.ready .app.state-updating .main-content > *:not(.sidebar):not(.popup):not(.state-overlay):not(.state-toast) {
+      filter: blur(0); opacity: 0; pointer-events: none;
+    }
+    .update-actions {
+      display: flex; flex-direction: row; gap: 12px;
+      align-items: center;
+    }
+    /* Атрибут hidden обязан прятать блоки даже если класс задаёт flex/block —
+       иначе оверлей обновления показывает все секции разом. */
+    [hidden] { display: none !important; }
+    /* Smaller variant of btn-launch for the modal so it doesn't dwarf the card. */
+    .btn-launch.update-primary {
+      width: auto;
+      height: 48px;
+      padding: 0 28px;
+      font-size: 16px;
+      box-shadow: 0 4px 24px rgba(139,92,246,0.32);
+    }
+
+    /* ── Error modal (error / noaccess / disconnected / techworks) ── */
+    .error-card {
+      display: flex; flex-direction: column;
+      align-items: center;
+      gap: 32px;
+      width: 478px;
+      position: relative;
+      z-index: 2;
+    }
+    .error-texts {
+      display: flex; flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      width: 100%;
+    }
+    .error-title {
+      font-weight: 600; font-size: 24px; line-height: 1;
+      color: #FFFFFF;
+      text-align: center;
+    }
+    .error-title.danger { color: #FF6363; }
+    .error-desc {
+      font-weight: 500; font-size: 15px; line-height: 19px;
+      color: #656571;
+      text-align: center;
+    }
+    .error-actions { display: flex; gap: 12px; }
+    .error-btn {
+      padding: 12px 16px;
+      height: 40px;
+      background: #18181C;
+      border: 1px solid #1C1C20;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: 'Onest', sans-serif;
+      font-weight: 500; font-size: 12px; line-height: 15px;
+      color: #FFFFFF;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .error-btn:hover { background: #1C1C20; border-color: #303037; }
+
+    /* Decorative floating shapes — 4 scattered around each modal.
+       Fallback is a tinted radial gradient (visible without images). When
+       PNGs are added to assets/icons/decorations/ they overlay on top. */
+    .deco {
+      position: absolute;
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: contain, 100% 100%;
+      border-radius: 50%;
+      pointer-events: none; user-select: none;
+      z-index: 1;
+    }
+    .deco-tr { top: 28px;    right: 180px; width: 150px; height: 150px;
+               opacity: 0.55; filter: blur(2.5px); transform: rotate(25deg); }
+    .deco-bl { bottom: 28px;  left: 190px;  width: 190px; height: 190px;
+               opacity: 0.85; transform: rotate(-25deg); }
+    .deco-br { bottom: 80px;  right: 210px; width: 100px; height: 100px;
+               opacity: 0.7;  filter: blur(0.8px); transform: rotate(-42deg); }
+    .deco-tl { top: 110px;    left: 315px;  width: 55px;  height: 55px;
+               opacity: 0.35; filter: blur(0.8px); transform: rotate(-42deg); }
+
+    /* State-specific decorations. Image (if file exists in
+       assets/icons/decorations/) renders on top of the colored glow. */
+    #overlay-error .deco {
+      background-image:
+        url('../assets/icons/decorations/error-blob.png'),
+        radial-gradient(circle, rgba(255, 99, 99, 0.55) 0%, rgba(255, 99, 99, 0) 70%);
+    }
+    #overlay-noaccess .deco {
+      background-image:
+        url('../assets/icons/decorations/chest.png'),
+        radial-gradient(circle, rgba(139, 92, 246, 0.5) 0%, rgba(139, 92, 246, 0) 70%);
+    }
+    #overlay-disconnected .deco {
+      background-image:
+        url('../assets/icons/decorations/chain.png'),
+        radial-gradient(circle, rgba(255, 99, 99, 0.5) 0%, rgba(255, 99, 99, 0) 70%);
+    }
+    #overlay-techworks .deco {
+      background-image:
+        url('../assets/icons/decorations/pickaxe.png'),
+        radial-gradient(circle, rgba(139, 92, 246, 0.5) 0%, rgba(139, 92, 246, 0) 70%);
+    }
+
+    /* ── Full-screen state toast (bottom-right) — success/update ── */
+    .state-toast {
+      position: absolute;
+      right: 24px; bottom: 24px;
+      width: 300px;
+      display: flex; flex-direction: column;
+      padding: 16px; gap: 16px;
+      background: #151517;
+      border: 1px solid #1C1C20;
+      box-shadow: 0 34px 58.4px #141417;
+      border-radius: 8px;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      pointer-events: none;
+      z-index: 300;
+    }
+    .state-toast.visible { opacity: 1; transform: translateY(0); }
+    .state-toast-text    { display: flex; flex-direction: column; gap: 8px; }
+    .state-toast-header  { display: flex; align-items: center; gap: 8px; }
+    .state-toast-icon    { width: 16px; height: 16px; flex-shrink: 0; }
+    .state-toast-icon img { width: 100%; height: 100%; }
+    .state-toast-icon.success img {
+      filter: brightness(0) saturate(100%) invert(69%) sepia(70%)
+              saturate(463%) hue-rotate(98deg) brightness(96%) contrast(88%);
+    }
+    .state-toast-title   { font-weight: 500; font-size: 13px; line-height: 17px; color: #FFFFFF; flex: 1; }
+    .state-toast-body    {
+      padding-left: 24px;
+      font-weight: 500; font-size: 11px; line-height: 14px; color: #656571;
+    }
+    .state-toast-track {
+      width: 100%; height: 16px;
+      background: #1C1C20;
+      border: 1px solid rgba(101, 101, 113, 0.1);
+      border-radius: 16px;
+      padding: 4px;
+    }
+    .state-toast-bar {
+      height: 8px; width: 100%; border-radius: 16px;
+      box-shadow: 0 4px 4px #141417;
+      transition: width 4s linear;
+    }
+    .state-toast-bar.green { background: #14CF7E; }
+    .state-toast-bar.gray  { background: #656571; }
+
+    /* ── Toast ── */
+    .toast {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      display: flex; flex-direction: column; gap: 16px;
+      padding: 16px;
+      background: #151517;
+      border: 1px solid #1C1C20;
+      box-shadow: 0 34px 58.4px #141417;
+      border-radius: 8px;
+      opacity: 0; transform: translateY(8px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      pointer-events: none;
+    }
+    .toast.visible { opacity: 1; transform: translateY(0); }
+
+    .toast-text   { display: flex; flex-direction: column; gap: 8px; }
+    .toast-header { display: flex; align-items: center; gap: 8px; }
+    .toast-icon   { width: 16px; height: 16px; flex-shrink: 0; }
+    .toast-icon img { width: 100%; height: 100%; }
+    .toast-title  { font-weight: 500; font-size: 13px; color: #FFFFFF; flex: 1; }
+    .toast-body   {
+      padding-left: 24px;
+      font-weight: 500; font-size: 11px; color: #656571; line-height: 14px;
+    }
+    .toast-track {
+      width: 100%; height: 16px;
+      background: #1C1C20;
+      border: 1px solid rgba(101,101,113,0.1);
+      border-radius: 16px; padding: 4px;
+    }
+    .toast-bar {
+      height: 8px; width: 100%; border-radius: 16px;
+      background: #8b5cf6;
+      box-shadow: 0 4px 4px #141417;
+      transition: width 4s linear;
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+
+    <!-- ── Titlebar ── -->
+    <div class="titlebar">
+      <div class="titlebar-left">
+
+        <!-- Logo + chevron -->
+        <div class="logo">
+          <div class="logo-icon">
+            <!-- assets/icons/logo.svg -->
+            <img src="../assets/icons/logo.svg" alt="">
+          </div>
+          <span class="logo-text">EnergyUtils</span>
+          <div class="logo-down">
+            <!-- assets/icons/down.svg (12×12) -->
+            <img src="../assets/icons/down.svg" alt="">
+          </div>
+        </div>
+
+      </div>
+
+      <div class="titlebar-right">
+        <div class="header-actions" style="display:flex;align-items:center;gap:12px;">
+
+          <!-- Account pill — click toggles account-info-card -->
+          <div class="account-pill" id="account-pill">
+            <div class="pill-info">
+              <span class="pill-username"></span><script>(function(){var c=window.__rvCache;if(!c){try{c=JSON.parse(localStorage.getItem('rv_user')||'null');}catch(_){}}if(c&&c.username)document.currentScript.previousElementSibling.textContent=c.username;})();</script>
+              <div class="pill-dot"></div>
+            </div>
+            <div class="pill-down">
+              <!-- assets/icons/down.svg -->
+              <img src="../assets/icons/down.svg" alt="">
+            </div>
+          </div>
+
+        </div>
+
+        <div class="window-controls">
+          <button class="btn-wc" id="btn-hide">
+            <img src="../assets/icons/hide.svg" alt="">
+          </button>
+          <button class="btn-wc" id="btn-close">
+            <img src="../assets/icons/close.svg" alt="">
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Main content ── -->
+    <div class="main-content">
+
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="nav-top">
+          <button class="nav-btn active">
+            <!-- assets/icons/home.svg (24×24) -->
+            <img src="../assets/icons/home.svg" alt="">
+            <span class="nav-label">Главная</span>
+          </button>
+          <button class="nav-btn" onclick="navigateTo('versions.html')">
+            <!-- assets/icons/puzzle.svg -->
+            <img src="../assets/icons/puzzle.svg" alt="">
+            <span class="nav-label">Версии</span>
+          </button>
+          <button class="nav-btn" onclick="navigateTo('mods.html')">
+            <img src="../assets/icons/import.svg" alt="">
+            <span class="nav-label">Моды</span>
+          </button>
+          <button class="nav-btn" onclick="navigateTo('accounts.html')">
+            <img src="../assets/icons/person.png" alt="">
+            <span class="nav-label">Аккаунты</span>
+          </button>
+          <button class="nav-btn" onclick="navigateTo('settings.html')">
+            <!-- assets/icons/settings.svg -->
+            <img src="../assets/icons/settings.svg" alt="">
+            <span class="nav-label">Настройки</span>
+          </button>
+        </div>
+        <button class="nav-btn nav-quit" id="btn-quit">
+          <!-- assets/icons/quit.svg -->
+          <img src="../assets/icons/quit.svg" alt="">
+        </button>
+      </div>
+
+      <!-- Quit confirmation popup — anchored next to the quit button -->
+      <div class="popup popup-quit" id="popup-quit">
+        <div class="popup-quit-header">
+          <div class="popup-quit-icon"><img src="../assets/icons/quit.svg" alt=""></div>
+          <span class="popup-quit-title">Выход</span>
+        </div>
+        <p class="popup-quit-desc">Закрыть EnergyUtils?</p>
+        <div class="popup-quit-actions">
+          <button class="popup-quit-confirm" id="quit-confirm">Подтверждаю</button>
+          <button class="popup-quit-cancel"  id="quit-cancel">Остаться</button>
+        </div>
+      </div>
+
+      <!-- ── State overlays (launch / patch / error / noaccess / disconnected / techworks) ── -->
+      <div class="state-overlay" id="overlay-launch">
+        <div class="launch-card">
+          <div class="launch-badges">
+            <div class="badge badge-version">1.21.4</div>
+            <div class="badge badge-fabric">
+              Fabric
+              <img src="../assets/icons/fabric.svg" alt="">
+            </div>
+          </div>
+          <h2 class="launch-title" id="launch-title">Запуск игры...</h2>
+          <div class="launch-progress">
+            <div class="launch-status" id="launch-status">Проверка целостности файлов...</div>
+            <div class="launch-bar-track">
+              <div class="launch-bar-fill" id="launch-bar"></div>
+            </div>
+            <div class="launch-meta">
+              <span id="launch-percent">4%</span>
+            </div>
+          </div>
+          <button class="launch-cancel" id="launch-cancel">Отмена</button>
+        </div>
+      </div>
+
+      <div class="state-overlay" id="overlay-patch">
+        <div class="launch-card">
+          <h2 class="launch-title">Загрузка патча...</h2>
+          <div class="launch-progress">
+            <div class="launch-status">Поиск доступных обновлений...</div>
+            <div class="launch-bar-track">
+              <div class="launch-bar-fill" id="patch-bar"></div>
+            </div>
+            <div class="launch-meta">
+              <span id="patch-percent">4%</span>
+              <span class="sep">|</span>
+              <span id="patch-speed" style="text-align:center;">5.2 MB/s</span>
+              <span class="sep">|</span>
+              <span id="patch-size" class="meta-right">5 MB из 450 MB</span>
+            </div>
+          </div>
+          <button class="launch-cancel" id="patch-cancel">Отмена</button>
+        </div>
+      </div>
+
+      <div class="state-overlay" id="overlay-error">
+        <div class="deco deco-tr"></div>
+        <div class="deco deco-bl"></div>
+        <div class="deco deco-br"></div>
+        <div class="deco deco-tl"></div>
+        <div class="error-card">
+          <div class="badge badge-error">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 1.333A6.667 6.667 0 1 1 1.333 8 6.674 6.674 0 0 1 8 1.333Zm0 1.334A5.333 5.333 0 1 0 13.333 8 5.34 5.34 0 0 0 8 2.667Zm0 2a.667.667 0 0 1 .667.666v3.334a.667.667 0 0 1-1.334 0V5.333A.667.667 0 0 1 8 4.667Zm0 6a.833.833 0 1 1 0 1.666.833.833 0 0 1 0-1.666Z" fill="#FF6363"/>
+            </svg>
+            <span id="error-badge-text">Ошибка</span>
+          </div>
+          <div class="error-texts">
+            <h2 class="error-title" id="error-title">Сбой запуска</h2>
+            <p class="error-desc" id="error-desc">Произошла неизвестная ошибка.</p>
+            <ul class="error-steps" id="error-steps" style="margin:10px 0 0; padding-left:18px; text-align:left; color:#D8D8D8; font-size:13px; line-height:1.7;"></ul>
+            <div class="error-tip" id="error-tip" style="margin-top:12px; padding:10px 12px; border-radius:10px; background:rgba(124,92,255,0.08); border:1px solid rgba(124,92,255,0.25); color:#C4B5FD; font-size:12.5px; line-height:1.6; display:none;"></div>
+          </div>
+          <div class="error-actions">
+            <button class="error-btn state-close" id="error-close">Ок</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="state-overlay" id="overlay-noaccess">
+        <div class="deco deco-tr"></div>
+        <div class="deco deco-bl"></div>
+        <div class="deco deco-br"></div>
+        <div class="deco deco-tl"></div>
+        <div class="error-card">
+          <div class="badge badge-orange">
+            <img src="../assets/icons/buy.svg" alt="">
+            <span>Подписка</span>
+          </div>
+          <div class="error-texts">
+            <h2 class="error-title">Доступ ограничен</h2>
+            <p class="error-desc">Для игры с EnergyUtils тебе нужна активная подписка. Оформи её в магазине, чтобы начать приключение!</p>
+          </div>
+          <div class="error-actions">
+            <button class="error-btn state-close">Выбрать</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="state-overlay" id="overlay-disconnected">
+        <div class="deco deco-tr"></div>
+        <div class="deco deco-bl"></div>
+        <div class="deco deco-br"></div>
+        <div class="deco deco-tl"></div>
+        <div class="error-card">
+          <div class="badge badge-error">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M2.167 2.167a.667.667 0 0 1 .943 0L13.833 12.89a.667.667 0 1 1-.943.944L2.167 3.11a.667.667 0 0 1 0-.943Zm1.886 2.829a.667.667 0 0 1 .943 0l7.008 7.009a.667.667 0 1 1-.943.943L4.053 5.939a.667.667 0 0 1 0-.943Z" fill="#FF6363"/>
+            </svg>
+            <span>Соединение</span>
+          </div>
+          <div class="error-texts">
+            <h2 class="error-title danger">Бабах! Связь оборвалась</h2>
+            <p class="error-desc">Кажется, интернет решил взять паузу. Проверь роутер или кабель.</p>
+          </div>
+          <div class="error-actions">
+            <button class="error-btn state-close">Выбрать</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="state-overlay" id="overlay-techworks">
+        <div class="deco deco-tr"></div>
+        <div class="deco deco-bl"></div>
+        <div class="deco deco-br"></div>
+        <div class="deco deco-tl"></div>
+        <div class="error-card">
+          <div class="badge badge-orange">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M11.56 2.78a2.2 2.2 0 0 1 1.556.644l1.46 1.46a2.2 2.2 0 0 1 0 3.111l-2.026 2.027-4.572-4.571L9.997 3.43a2.2 2.2 0 0 1 1.563-.65ZM6.11 6.44l4.572 4.572-5.44 5.44a2.2 2.2 0 0 1-3.112 0l-1.46-1.46a2.2 2.2 0 0 1 0-3.112L6.11 6.44Z" fill="#8b5cf6"/>
+            </svg>
+            <span>Техработы</span>
+          </div>
+          <div class="error-texts">
+            <h2 class="error-title">Скоро вернемся</h2>
+            <p class="error-desc">Проводим плановое обслуживание EnergyUtils. Отдыхаем от стройки, пока мы всё настраиваем.</p>
+          </div>
+          <div class="error-actions">
+            <button class="error-btn state-close">Выбрать</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toasts for success/update outcomes -->
+      <div class="state-toast" id="toast-success">
+        <div class="state-toast-text">
+          <div class="state-toast-header">
+            <div class="state-toast-icon success"><img src="../assets/icons/success.svg" alt=""></div>
+            <span class="state-toast-title">И?гра запускается</span>
+          </div>
+          <div class="state-toast-body">Удачной игры вместе с EnergyUtils!</div>
+        </div>
+        <div class="state-toast-track">
+          <div class="state-toast-bar green" id="toast-success-bar"></div>
+        </div>
+      </div>
+
+      <div class="state-toast" id="toast-update">
+        <div class="state-toast-text">
+          <div class="state-toast-header">
+            <div class="state-toast-icon"><img src="../assets/icons/update.svg" alt=""></div>
+            <span class="state-toast-title" id="toast-update-title">Обновление</span>
+          </div>
+          <div class="state-toast-body" id="toast-update-body">Мод обновлён.</div>
+        </div>
+        <div class="state-toast-track">
+          <div class="state-toast-bar gray" id="toast-update-bar"></div>
+        </div>
+      </div>
+
+      <!-- Center panel -->
+      <div class="center-panel">
+
+        <!-- Quick launch -->
+        <div class="quick-launch">
+          <div class="ql-label">
+            <!-- assets/icons/dashboard.svg (24×24) -->
+            <img src="../assets/icons/dashboard.svg" alt="">
+            <span class="ql-label-text">Быстрый запуск</span>
+          </div>
+          <div class="ql-divider"></div>
+          <div class="ql-servers" id="ql-servers">
+            <div class="server-pill" data-server="mc.reallyworld.me">
+              <img class="server-icon" src="../assets/icons/servers/RW.png" alt="">
+              <span class="server-name">Really World</span>
+            </div>
+            <div class="server-pill" data-server="mc.funtime.su">
+              <img class="server-icon" src="../assets/icons/servers/FT.png" alt="">
+              <span class="server-name">Fun Time</span>
+            </div>
+            <div class="server-pill" data-server="mc.holyworld.ru">
+              <img class="server-icon" src="../assets/icons/servers/HW.png" alt="">
+              <span class="server-name">Holy World</span>
+            </div>
+            <div class="server-pill" data-server="play.sunmc.ru">
+              <img class="server-icon" src="../assets/icons/servers/SR.png" alt="">
+              <span class="server-name">Sunrise</span>
+            </div>
+            <!-- #18: свои серверы —
+            удалено по просьбе.
+          -->
+          </div>
+        </div>
+
+        <!-- News (#37) -->
+        <div class="quick-launch" id="eu-news" style="flex-direction:column; align-items:stretch; margin-top:10px; display:none;">
+          <div class="ql-label">
+            <span class="ql-label-text">Новости EnergyUtils</span>
+          </div>
+          <div id="eu-news-list" style="display:flex; flex-direction:column; gap:6px; margin-top:6px;"></div>
+        </div>
+
+        <!-- Game card -->
+        <div class="game-card">
+          <div class="game-card-bg"></div>
+          <div class="game-card-overlay"></div>
+          <div class="game-card-content">
+            <div class="game-info">
+              <div class="game-version-row">
+                <!-- assets/icons/fabric.svg (32×32) -->
+                <img class="game-icon" src="../assets/icons/fabric.svg" alt="">
+                <span class="game-title-text">Fabric 1.21.4</span>
+                <div class="game-down-icon" id="open-versions">
+                  <img src="../assets/icons/down.svg" alt="">
+                </div>
+              </div>
+              <div class="game-meta">
+                <span class="meta-updated js-rv-game-last-update rv-skel" style="display:inline-block;width:140px;height:10px;"></span>
+                <span class="meta-played js-rv-last-played"></span>
+              </div>
+            </div>
+            <button class="btn-launch" id="btn-launch">Запустить игру</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- #26: компактный футер с версиями (в укромном месте) -->
+      <div style="position:absolute; left:0; right:0; bottom:6px; display:flex; justify-content:center; gap:14px; font-size:9px; color:#565662; opacity:.55; pointer-events:none; user-select:none;">
+        <span id="ft-launcher">Лаунчер v-</span>
+        <span id="ft-mod">Мод v-</span>
+        <span id="ft-client">Клиент -</span>
+      </div>
+    </div>
+
+    <!-- ── Client popup (from logo chevron) ── -->
+    <div class="popup popup-client" id="popup-client">
+
+      <div class="popup-divider"></div>
+      <div class="popup-item" data-action="check-update"><div class="popup-item-icon"><img src="../assets/icons/update.svg" alt=""></div><span class="popup-item-label">Проверить обновления</span></div>
+      <div class="popup-item" data-action="download-mod"><div class="popup-item-icon"><img src="../assets/icons/down.svg" alt=""></div><span class="popup-item-label">Скачать мод</span></div>
+      <div class="popup-item" data-action="update-launcher"><div class="popup-item-icon"><img src="../assets/icons/update.svg" alt=""></div><span class="popup-item-label">Обновить лаунчер</span></div>
+      <div class="popup-divider"></div>
+      <div class="popup-item" data-action="open-folder"><div class="popup-item-icon"><img src="../assets/icons/folder.svg" alt=""></div><span class="popup-item-label">Открыть папку</span></div>
+      <div class="popup-item" data-action="open-mods"><div class="popup-item-icon"><img src="../assets/icons/folder.svg" alt=""></div><span class="popup-item-label">Папка с модами</span></div>
+      <div class="popup-divider"></div>
+      <div class="popup-item" data-url="https://energyutils.me"><div class="popup-item-icon"><img src="../assets/icons/link.svg" alt=""></div><span class="popup-item-label">Официальный сайт</span></div>
+      <div class="popup-item" data-url="https://t.me/energyutils"><div class="popup-item-icon"><img src="../assets/icons/link.svg" alt=""></div><span class="popup-item-label">Telegram</span></div>
+      <div class="popup-item" data-url="https://help.energyutils.me/"><div class="popup-item-icon"><img src="../assets/icons/link.svg" alt=""></div><span class="popup-item-label">Поддержка</span></div>
+      <div class="popup-divider"></div>
+      <div class="popup-item" data-nav="settings.html"><div class="popup-item-icon"><img src="../assets/icons/settings.svg" alt=""></div><span class="popup-item-label">Настройки</span></div>
+    </div>
+
+    <!-- ── Account popup (from pill chevron) ── -->
+    <div class="popup popup-account" id="popup-account">
+      <div class="popup-item" id="btn-logout">
+        <div class="popup-item-icon"><img src="../assets/icons/person.png" alt=""></div>
+        <span class="popup-item-label">Аккаунты</span>
+      </div>
+    </div>
+
+    <!-- ── Launcher update overlay (self-update flow) ── -->
+    <div class="state-overlay" id="overlay-update">
+      <div class="launch-card">
+        <h2 class="launch-title" id="update-title">Доступно обновление</h2>
+
+        <!-- Prompt state: pitch + two buttons -->
+        <div class="launch-progress" id="update-prompt" hidden>
+          <div class="launch-status" style="text-align:center;" id="update-prompt-text">Установите новую версию для продолжения работы</div>
+        </div>
+        <div class="update-actions" id="update-actions" hidden>
+          <button class="btn-launch update-primary" id="update-btn-go">Обновить</button>
+          <button class="launch-cancel" id="update-btn-cancel">Отмена</button>
+        </div>
+
+        <!-- Download state: bar + meta + cancel -->
+        <div class="launch-progress" id="update-downloading" hidden>
+          <div class="launch-status" id="update-status">Поиск доступных обновлений...</div>
+          <div class="launch-bar-track">
+            <div class="launch-bar-fill" id="update-bar" style="width:4%"></div>
+          </div>
+          <div class="launch-meta">
+            <span id="update-pct">0%</span>
+            <span class="sep">|</span>
+            <span id="update-speed" style="text-align:center;">—</span>
+            <span class="sep">|</span>
+            <span id="update-size" class="meta-right">—</span>
+          </div>
+          <div class="update-actions" style="margin-top:12px;" id="update-cancel-wrap">
+            <button class="launch-cancel" id="update-btn-cancel-dl">Отменить</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Mod missing overlay (предупреждение перед запуском без мода) ── -->
+    <div class="state-overlay" id="overlay-mod-missing" style="display:none">
+      <div class="launch-card">
+        <h2 class="launch-title">Мод не скачан</h2>
+        <div class="launch-progress">
+          <div class="launch-status" style="text-align:center;">У вас не установлен мод EnergyUtils. Скачать сейчас или запустить игру без него?</div>
+        </div>
+        <div class="update-actions">
+          <button class="btn-launch update-primary" id="mod-missing-go">Скачать мод</button>
+          <button class="launch-cancel" id="mod-missing-skip">Всё равно запустить</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // ── Page transitions ─────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', () => {
+      requestAnimationFrame(() => {
+        document.body.classList.add('ready');
+        window.nativeReady?.().catch(() => {});
+      });
+      hydrateUserData();
+      checkLauncherUpdate(true);
+
+      // (добавление своего сервера удалено по просьбе)
+
+      // ── #26: версии в футере ──
+      (async () => {
+        try {
+          const r = await window.nativeGetRuntimeInfo?.();
+          if (!r) return;
+          const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.textContent = v; };
+          set('ft-launcher', 'Лаунчер v' + r.launcher);
+          if (r.mod) set('ft-mod', 'Мод v' + r.mod);
+          if (r.client) set('ft-client', 'Клиент ' + r.client);
+        } catch (_) {}
+      })();
+
+      // ── #33: новости с офлайн-кэшем ──
+      (async () => {
+        try {
+          const CACHE_KEY = 'eu_news_cache';
+          let rendered = false;
+          const render = (items) => {
+            if (!items || !items.length || rendered) return;
+            rendered = true;
+            const box = document.getElementById('eu-news');
+            const list = document.getElementById('eu-news-list');
+            if (!box || !list) return;
+            list.innerHTML = '';
+            items.forEach((n) => {
+              const el = document.createElement('div');
+              el.style.cssText = 'background:#18181C;border:1px solid #1C1C20;border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;';
+              const t = document.createElement('strong'); t.textContent = n.title || ''; t.style.cssText = 'font-size:12px;color:#fff;';
+              const tx = document.createElement('span'); tx.textContent = n.text || ''; tx.style.cssText = 'font-size:11px;color:#9a9aa5;line-height:1.4;';
+              el.appendChild(t); el.appendChild(tx); list.appendChild(el);
+            });
+            box.style.display = 'flex';
+          };
+          try {
+            const cached = localStorage.getItem(CACHE_KEY);
+            if (cached) render(JSON.parse(cached));
+          } catch (_) {}
+          try {
+            const r = await window.nativeGetNews?.();
+            const items = (r && r.items) || [];
+            if (items.length) { try { localStorage.setItem(CACHE_KEY, JSON.stringify(items.slice(0, 5))); } catch (_) {} render(items.slice(0, 5)); }
+          } catch (_) {}
+        } catch (_) {}
+      })();
+
+      // ── #17: звуки кликов (WebAudio, тихий blip) ──
+      (() => {
+        try {
+          let enabled = true;
+          try { enabled = localStorage.getItem('eu_sounds') !== 'off'; } catch (_) {}
+          let actx = null;
+          const blip = () => {
+            if (!enabled) return;
+            try {
+              if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+              const o = actx.createOscillator();
+              const g = actx.createGain();
+              o.type = 'sine'; o.frequency.value = 660;
+              g.gain.setValueAtTime(0.0001, actx.currentTime);
+              g.gain.exponentialRampToValueAtTime(0.06, actx.currentTime + 0.005);
+              g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + 0.08);
+              o.connect(g); g.connect(actx.destination);
+              o.start(); o.stop(actx.currentTime + 0.09);
+            } catch (_) {}
+          };
+          document.addEventListener('click', (e) => {
+            if (e.target.closest('.btn-launch, .nav-btn, .popup-item, .btn-wc, .server-pill')) blip();
+          }, true);
+          window.euSetSounds = (on) => { enabled = !!on; try { localStorage.setItem('eu_sounds', on ? 'on' : 'off'); } catch (_) {} };
+        } catch (_) {}
+      })();
+
+      // ── События из трея (#11) ──
+      window.nativeOnTrayCheckUpdates?.((hook) => {
+        // Трей = только лаунчер (мод — кнопкой «Проверить обновления», чтобы не путать).
+        if (typeof checkLauncherUpdate === 'function') checkLauncherUpdate(false);
+      });
+    });
+
+    // ── Launcher self-update flow ──────────────────────────────────────────
+    // Показывает оверлей «Доступно обновление» с кнопками «Обновить/Отмена».
+    function showUpdatePrompt(title, text, primaryClass, onGo, goLabel, cancelLabel) {
+      const wasUpdating = appEl.classList.contains('state-updating');
+      if (!wasUpdating) appEl.classList.add('state-updating');
+      document.getElementById('update-title').textContent = title;
+      document.getElementById('update-prompt-text').textContent = text;
+      document.getElementById('update-prompt').hidden = false;
+      document.getElementById('update-actions').hidden = false;
+      document.getElementById('update-downloading').hidden = true;
+      document.getElementById('update-btn-go').className = 'btn-launch update-primary' + (primaryClass ? ' ' + primaryClass : '');
+      document.getElementById('update-btn-go').textContent = goLabel || 'Обновить';
+      document.getElementById('update-btn-go').onclick = async () => {
+        try { await onGo(); } catch (_) {}
+      };
+      document.getElementById('update-btn-cancel').textContent = cancelLabel || 'Отмена';
+      document.getElementById('update-btn-cancel').onclick = () => {
+        appEl.classList.remove('state-updating');
+      };
+    }
+
+    // Проверка всего: и мод, и лаунчер (раздельные уведомления).
+    async function checkAllUpdates() {
+      let modInfo, launcherInfo;
+      try { modInfo = await window.nativeCheckModUpdate?.(); } catch (_) {}
+      try { launcherInfo = await window.nativeCheckLauncherUpdate?.(); } catch (_) {}
+
+      const modAvailable = modInfo && !modInfo.error && modInfo.available;
+      const launcherAvailable = launcherInfo && !launcherInfo.error && launcherInfo.available;
+
+      // Если доступны обе — сначала лаунчер (важнее), потом мод.
+      if (launcherAvailable) {
+        showUpdatePrompt(
+          'Доступно обновление лаунчера',
+          modAvailable
+            ? 'Лаунчер и мод EnergyUtils обновлены. Начнём с лаунчера?'
+            : 'Вышла новая сборка лаунчера. Обновить сейчас?',
+          '', startLauncherDownload, 'Обновить', 'Пропустить'
+        );
+        return;
+      }
+      if (modAvailable) {
+        showUpdatePrompt('Доступно обновление мода', 'Версия ' + (modInfo.version || '—') + ' уже вышла. Обновить сейчас?', '', runModDownload, 'Обновить');
+        return;
+      }
+      // Всё актуально
+      const modCur = modInfo && modInfo.current;
+      showToastMessage('Всё актуально', (modCur ? 'Мод v' + modCur + ', ' : '') + 'лаунчер — последняя версия.');
+    }
+
+    // Проверка обновлений (МОД): актуально — «Загрузить заново».
+    async function checkModUpdates() {
+      let info;
+      try { info = await window.nativeCheckModUpdate?.(); } catch (_) { return; }
+      if (!info || info.error) {
+        showToastMessage('Не удалось проверить', 'Нет соединения с сервером. Проверьте интернет или включите VPN.');
+        return;
+      }
+      if (info.available) {
+        showUpdatePrompt('Доступно обновление мода', 'Версия ' + (info.version || '—') + ' уже вышла. Обновить сейчас?', '', runModDownload, 'Обновить');
+        return;
+      }
+      if (info.current) {
+        showUpdatePrompt('Мод установлен', 'У вас стоит v' + info.current + '. Загрузить заново?', '', runModDownload, 'Загрузить заново');
+        return;
+      }
+      showToastMessage('Мод актуален', 'Ничего нового не найдено.');
+    }
+
+    // Проверка обновлений (ЛАУНЧЕР): принудительно по SHA. При старте показываем
+    // «Обновить / Пропустить», чтобы новые сборки ставились автоматически.
+    async function checkLauncherUpdate(auto) {
+      let info;
+      try { info = await window.nativeCheckLauncherUpdate?.(); }
+      catch (_) { return; }
+      if (!info || info.error) {
+        // сети нет — не спамим тостом при автостарте
+        if (auto) return;
+        showToastMessage('Не удалось проверить', 'Нет соединения с сервером обновлений.');
+        return;
+      }
+      if (!info.available) {
+        if (auto) return;
+        showToastMessage('Лаунчер актуален', 'У вас установлена последняя версия EnergyUtils.');
+        return;
+      }
+      showUpdatePrompt('Доступно обновление лаунчера', 'Вышла новая сборка EnergyUtils. Обновить сейчас?', '', startLauncherDownload, 'Обновить', 'Пропустить');
+    }
+
+    async function startLauncherDownload() {
+      try { await window.nativeStartLauncherUpdate?.(); } catch (_) {}
+      switchToDownloadingUI();
+      showLauncherDownloadTick();
+    }
+
+    function showLauncherDownloadTick() {
+      const bar    = document.getElementById('update-bar');
+      const pct    = document.getElementById('update-pct');
+      const speed  = document.getElementById('update-speed');
+      const size   = document.getElementById('update-size');
+      const status = document.getElementById('update-status');
+
+      let lastBytes = 0, lastTime = Date.now();
+      const tick = async () => {
+        let p;
+        try { p = await window.nativeUpdateProgress?.(); } catch (_) {}
+        if (p) {
+          const v = Math.max(0, Math.min(100, Math.round((p.progress || 0) * 100)));
+          bar.style.width = v + '%';
+          pct.textContent = v + '%';
+          if (p.state === 'verifying')      { status.textContent = 'Проверка целостности...'; speed.textContent = '—'; size.textContent = '—'; }
+          else if (p.state === 'launching') { status.textContent = 'Запуск новой версии...'; }
+          else if (p.state === 'failed')    { status.textContent = 'Ошибка обновления'; return; }
+          else                                status.textContent = 'Скачивание...';
+        }
+        setTimeout(tick, 250);
+      };
+      tick();
+    }
+
+    // Скачать мод: прогресс + «Отменить». CancelInProgress-флаг чтобы не ждать
+    // native-завершения — оверлей закрывается сразу, качалка глохнет в фоне.
+    async function runModDownload() {
+      appEl.classList.add('state-updating');
+      document.getElementById('update-title').textContent = 'Скачивание мода...';
+      document.getElementById('update-prompt').hidden = true;
+      document.getElementById('update-actions').hidden = true;
+      document.getElementById('update-downloading').hidden = false;
+      document.getElementById('update-cancel-wrap').style.display = '';
+
+      const bar    = document.getElementById('update-bar');
+      const pct    = document.getElementById('update-pct');
+      const status = document.getElementById('update-status');
+      const cancelBtn = document.getElementById('update-btn-cancel-dl');
+      cancelBtn.disabled = false;
+      cancelBtn.textContent = 'Отменить';
+      cancelBtn.onclick = () => {
+        window.nativeCancelModDownload?.().catch(() => {});
+        appEl.classList.remove('state-updating');
+        resolveModMissing();
+      };
+
+      let timer = null;
+      const tick = async () => {
+        let p;
+        try { p = await window.nativeUpdateProgress?.(); } catch (_) {}
+        if (p && typeof p.progress === 'number') {
+          const v = Math.max(4, Math.min(100, Math.round(p.progress * 100)));
+          bar.style.width = v + '%';
+          pct.textContent = v + '%';
+          if (p.state === 'checking') status.textContent = 'Получение данных о версии...';
+          else if (p.state === 'verifying') status.textContent = 'Проверка целостности...';
+          else if (p.state === 'failed') status.textContent = (p.status || 'Ошибка');
+          else if (p.state === 'done') status.textContent = 'Мод установлен';
+          else status.textContent = 'Скачивание...';
+        }
+      };
+
+      try {
+        const downloadPromise = window.nativeDownloadMod?.();
+        timer = setInterval(tick, 300);
+        const res = await downloadPromise;
+        clearInterval(timer); timer = null;
+
+        if (res && res.ok) {
+          status.textContent = 'Мод установлен';
+          bar.style.width = '100%';
+          pct.textContent = '100%';
+          cancelBtn.disabled = true;
+          cancelBtn.textContent = 'Готово';
+          setTimeout(() => { appEl.classList.remove('state-updating'); resolveModMissing(); }, 1200);
+          return;
+        }
+        // Ошибка/отмена — если оверлей уже закрыли (кнопка Отмена), ничего не делаем.
+        if (!appEl.classList.contains('state-updating')) return;
+        const errText = (res && res.error) || 'Неизвестная ошибка';
+        if (/отменен|отменa|cancel/i.test(errText)) {
+          appEl.classList.remove('state-updating');
+          resolveModMissing();
+          return;
+        }
+        appEl.classList.remove('state-updating');
+        fillError(errText);
+        setState('error');
+        resolveModMissing();
+      } catch (e) {
+        if (timer) { clearInterval(timer); timer = null; }
+        if (!appEl.classList.contains('state-updating')) return;
+        appEl.classList.remove('state-updating');
+        fillError(String((e && e.message) || e));
+        setState('error');
+        resolveModMissing();
+      }
+    }
+
+    // Хук: если запуск ждал скачивания мода — после установки продолжаем запуск.
+    function resolveModMissing() {
+      if (!pendingLaunchServer) { closeAllPopups(); return; }
+      const srv = pendingLaunchServer;
+      pendingLaunchServer = null;
+      runLaunchSequence(srv);
+    }
+
+    function switchToDownloadingUI() {
+      document.getElementById('update-title').textContent = 'Загрузка обновления...';
+      document.getElementById('update-prompt').hidden = true;
+      document.getElementById('update-actions').hidden = true;
+      document.getElementById('update-downloading').hidden = false;
+      document.getElementById('update-cancel-wrap').style.display = 'none';
+    }
+
+    // ── Мод не скачан: предупреждение перед запуском ─────────────────────
+    function askInstallMod(quickServer) {
+      pendingLaunchServer = quickServer || '';
+      appEl.classList.add('state-updating');
+      document.getElementById('overlay-mod-missing').style.display = 'flex';
+      document.getElementById('mod-missing-go').onclick = async () => {
+        document.getElementById('overlay-mod-missing').style.display = 'none';
+        await runModDownload();
+      };
+      document.getElementById('mod-missing-skip').onclick = () => {
+        document.getElementById('overlay-mod-missing').style.display = 'none';
+        appEl.classList.remove('state-updating');
+        const srv = pendingLaunchServer; pendingLaunchServer = null;
+        runLaunchSequence(srv, true);
+      };
+    }
+
+    document.getElementById('update-btn-cancel-dl').addEventListener('click', () => {
+      window.nativeCancelModDownload?.().catch(() => {});
+    });
+    function navigateTo(url) {
+      // No fade-out: WebView2 keeps the last frame visible until the next page
+      // paints, so an instant nav looks smoother than a fade → blank → fade-in.
+      window.location.href = url;
+    }
+
+    function applyUserToChrome(u) {
+      if (!u) return;
+      const pillName = document.querySelector('#account-pill .pill-username');
+      const subName  = document.querySelector('#account-info-card .sub-username');
+      const subText  = document.querySelector('#account-info-card .sub-active-text');
+      const subDot   = document.querySelector('#account-info-card .sub-dot');
+      const subExp   = document.querySelector('#account-info-card .sub-expire-text');
+      const avatarSmEl    = document.querySelector('#account-pill .avatar-sm');
+      const avatarLargeEl = document.querySelector('#account-info-card .avatar-large');
+
+      if (pillName && u.username) pillName.textContent = u.username;
+      if (subName  && u.username) subName.textContent  = u.username;
+      const avatarSrc = u.avatarDataUrl || u.avatarUrl;
+      if (avatarSrc) {
+        if (avatarSmEl)    avatarSmEl.src    = avatarSrc;
+        if (avatarLargeEl) avatarLargeEl.src = avatarSrc;
+      }
+
+      const isFrozen = !!u.subscriptionFrozen;
+      const isActive = !!u.subscriptionActive && !isFrozen;
+      if (subText) subText.textContent = isFrozen ? 'Заморожена' : (isActive ? 'Активна' : 'Неактивна');
+      if (subDot)  subDot.style.background = isActive ? '' : '#888';
+
+      // Disable launch button when there's no active subscription.
+      const launchBtn = document.getElementById('btn-launch');
+      if (launchBtn) {
+        launchBtn.classList.toggle('disabled', !isActive);
+        launchBtn.disabled = !isActive;
+        launchBtn.title = isActive
+          ? ''
+          : (isFrozen ? 'Подписка заморожена' : 'Подписка не активна');
+      }
+
+      if (subExp) {
+        if (u.expiresAt) {
+          const d = new Date(u.expiresAt);
+          if (!isNaN(d.getTime())) {
+            const dd = String(d.getDate()).padStart(2, '0');
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const yy = String(d.getFullYear() % 100).padStart(2, '0');
+            subExp.textContent = `До ${dd}.${mm}.${yy}`;
+          } else {
+            subExp.textContent = '';
+          }
+        } else if (typeof u.daysLeft === 'number' && u.daysLeft < 0) {
+          subExp.textContent = 'Бессрочно';
+        } else {
+          subExp.textContent = '';
+        }
+      }
+    }
+
+    // Apply cached user immediately to avoid avatar/name flash on navigation.
+    try {
+      const cached = JSON.parse(localStorage.getItem('rv_user') || 'null');
+      if (cached) applyUserToChrome(cached);
+    } catch (_) {}
+
+    // ── Backend content (новости, обновления, дата обновления игры) ──
+    // Тянем с публичного API сайта, без авторизации. fetch() в WebView2
+    // использует системный TLS — никаких секретов в траффике нет.
+    const RV_API_BASE   = 'https://api.energyutils.me/api';
+    const RV_API_ORIGIN = 'https://api.energyutils.me';
+
+    function rvSafeImageUrl(raw) {
+      if (!raw) return null;
+      const s = String(raw);
+      // Только наши загрузки или явный https. Никаких javascript:, data:, ftp: и т.п.
+      if (/^\/uploads\/news\/[A-Za-z0-9_.\-]+$/.test(s)) return RV_API_ORIGIN + s;
+      if (/^https:\/\/[A-Za-z0-9._\-\/:%?=&#~+]+$/.test(s)) return s;
+      return null;
+    }
+
+    function rvFmtDate(iso) {
+      if (!iso) return '';
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
+      if (!m) return String(iso).slice(0, 10);
+      return `${m[3]}.${m[2]}.${m[1]}`;
+    }
+
+    function rvFmtDateShort(iso) {
+      if (!iso) return '';
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
+      if (!m) return '';
+      return `${m[3]}.${m[2]}`;
+    }
+
+    // ── Stale-while-revalidate cache (localStorage) ──
+    const RV_CACHE_TTL_MS = 10 * 60 * 1000; // 10 минут
+    function rvCacheGet(key) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return null;
+        const obj = JSON.parse(raw);
+        if (!obj || typeof obj.t !== 'number') return null;
+        if (Date.now() - obj.t > RV_CACHE_TTL_MS) return null;
+        return obj.v;
+      } catch (_) { return null; }
+    }
+    function rvCacheSet(key, value) {
+      try { localStorage.setItem(key, JSON.stringify({ t: Date.now(), v: value })); } catch (_) {}
+    }
+
+    function rvShowEmpty(list, text) {
+      list.replaceChildren();
+      const el = document.createElement('div');
+      el.className = 'rv-empty-text';
+      el.textContent = text;
+      list.appendChild(el);
+    }
+
+    function rvRenderNews(list, items) {
+      if (!Array.isArray(items) || items.length === 0) {
+        rvShowEmpty(list, 'Новостей пока нет');
+        return;
+      }
+      list.replaceChildren();
+      for (const n of items) {
+        const card = document.createElement('div');
+        card.className = 'news-card';
+        const safe = rvSafeImageUrl(n.imageUrl);
+        if (safe) {
+          const cleaned = safe.replace(/["()\\]/g, '');
+          card.style.setProperty('--news-bg', `url("${cleaned}")`);
+        }
+
+        const badge = document.createElement('div');
+        badge.className = 'news-badge';
+        const dateSpan = document.createElement('span');
+        dateSpan.className = 'news-date';
+        dateSpan.textContent = rvFmtDate(n.publishedAt);
+        badge.appendChild(dateSpan);
+
+        const title = document.createElement('span');
+        title.className = 'news-title';
+        title.textContent = n.title || '';
+
+        const desc = document.createElement('span');
+        desc.className = 'news-desc';
+        desc.textContent = n.description || '';
+
+        card.appendChild(badge);
+        card.appendChild(title);
+        card.appendChild(desc);
+        list.appendChild(card);
+      }
+    }
+
+    function rvRenderUpdates(list, items) {
+      if (!Array.isArray(items) || items.length === 0) {
+        rvShowEmpty(list, 'Обновлений пока нет');
+        return;
+      }
+      list.replaceChildren();
+      for (const u of items) {
+        const row = document.createElement('div');
+        row.className = 'update-item';
+
+        const iconWrap = document.createElement('div');
+        iconWrap.className = 'update-item-icon';
+        const img = document.createElement('img');
+        img.src = '../assets/icons/info.svg';
+        img.alt = '';
+        iconWrap.appendChild(img);
+
+        const content = document.createElement('div');
+        content.className = 'update-content';
+        const title = document.createElement('span');
+        title.className = 'update-title';
+        title.textContent = u.title || '';
+        const desc = document.createElement('span');
+        desc.className = 'update-desc';
+        desc.textContent = u.description || '';
+        content.appendChild(title);
+        content.appendChild(desc);
+
+        row.appendChild(iconWrap);
+        row.appendChild(content);
+        list.appendChild(row);
+      }
+    }
+
+    async function rvLoadNews() {
+      const list = document.getElementById('news-list');
+      if (!list) return;
+      const cached = rvCacheGet('rv_news_v1');
+      if (cached) { rvRenderNews(list, cached); return; }
+      try {
+        const res = await fetch(`${RV_API_BASE}/public/launcher/news`, { cache: 'no-store' });
+        if (!res.ok) { rvShowEmpty(list, 'Не удалось загрузить новости'); return; }
+        const data = await res.json();
+        const items = (data && data.success && Array.isArray(data.data)) ? data.data : [];
+        rvCacheSet('rv_news_v1', items);
+        rvRenderNews(list, items);
+      } catch (_) {
+        rvShowEmpty(list, 'Не удалось загрузить новости');
+      }
+    }
+
+    async function rvLoadUpdates() {
+      const list = document.getElementById('updates-list');
+      if (!list) return;
+      const cached = rvCacheGet('rv_updates_v1');
+      if (cached) { rvRenderUpdates(list, cached); return; }
+      try {
+        const res = await fetch(`${RV_API_BASE}/public/launcher/updates`, { cache: 'no-store' });
+        if (!res.ok) { rvShowEmpty(list, 'Не удалось загрузить обновления'); return; }
+        const data = await res.json();
+        const items = (data && data.success && Array.isArray(data.data)) ? data.data : [];
+        rvCacheSet('rv_updates_v1', items);
+        rvRenderUpdates(list, items);
+      } catch (_) {
+        rvShowEmpty(list, 'Не удалось загрузить обновления');
+      }
+    }
+
+    // game-last-update теперь обрабатывается в rv-launcher-common.js
+    // через классы .js-rv-game-last-update + data-client-type.
+
+    // Применяем настройку «Быстрый запуск» (показ/скрытие строки серверов).
+    // Читаем синхронно — нативный биндинг возвращает Promise, до его резолва
+    // секция остаётся видимой. Чтобы не было «вспышки» при выключенном
+    // состоянии, прячем заранее через CSS и показываем только если включено.
+    async function applyQuickLaunchVisibility() {
+      const ql = document.querySelector('.quick-launch');
+      if (!ql) return;
+      let show = true;
+      try { show = (await window.nativeGetShowQuickLaunch?.()) !== false; } catch (_) {}
+      // `hidden` атрибут вместо display:none — даёт CSS `:has()` селектору
+      // зацепиться (.center-panel:has(.quick-launch[hidden]) .game-card).
+      ql.hidden = !show;
+    }
+
+    // ── Pull username/subscription from C++ and fill the chrome ───────────
+    async function hydrateUserData() {
+      hydrateSelectedVersion();
+      applyQuickLaunchVisibility();
+      // rvLoadClientVersion вызывается из общего rv-launcher-common.js
+      // автоматически для всех .js-rv-client-version элементов.
+      try {
+        const s = await window.nativeAuthState?.();
+        if (!s || s.state !== 'confirmed') {
+          // Token gone or invalidated — bounce back to auth screen.
+          try { localStorage.removeItem('rv_user'); } catch (_) {}
+          navigateTo('auth.html');
+          return;
+        }
+        const u = s.user || {};
+        try { localStorage.setItem('rv_user', JSON.stringify(u)); } catch (_) {}
+        applyUserToChrome(u);
+      } catch (e) {
+        // If the binding isn't there yet (shouldn't happen post-Etap 0),
+        // leave the placeholder values rather than redirecting blindly.
+      }
+    }
+
+    // Versions we deliberately disable in the UI until backend support is
+    // ready. Mirrored in versions.html (the `locked` class on the card).
+    // If the user has one of these stamped in their persisted selection,
+    // we migrate them to the first non-locked version silently.
+    const LOCKED_VERSIONS = ['1.21.4-beta'];
+
+    // Update the launch card's version label/icon to reflect the saved choice.
+    async function hydrateSelectedVersion() {
+      try {
+        const versions   = (await window.nativeGetVersions?.()) || [];
+        let   selectedId = await window.nativeGetSelectedVersion?.();
+        let   entry      = selectedId ? versions.find(v => v.id === selectedId) : null;
+
+        // Migrate away from a locked version that was saved before this
+        // restriction was added. Pick the first available unlocked entry.
+        if (entry && LOCKED_VERSIONS.includes(entry.version)) {
+          const fallback = versions.find(v => !LOCKED_VERSIONS.includes(v.version));
+          if (fallback) {
+            try { await window.nativeSetSelectedVersion?.(fallback.id); } catch (_) {}
+            entry = fallback;
+          }
+        }
+
+        if (!entry) return;
+
+        const titleEl = document.querySelector('.game-title-text');
+        if (titleEl) {
+          const typeLabel = entry.type ? entry.type.charAt(0).toUpperCase() + entry.type.slice(1) : 'Fabric';
+          titleEl.textContent = `${typeLabel} ${entry.version}`;
+        }
+
+        // client_type в БД лежит в виде "<type>-<version>" (см. client_versions).
+        if (entry.type && entry.version) {
+          const ct = `${entry.type}-${entry.version}`;
+          // Проставляем data-client-type на динамические мета-элементы.
+          document.querySelectorAll('.js-rv-game-last-update, .js-rv-last-played')
+            .forEach((el) => el.setAttribute('data-client-type', ct));
+          // Перерендерим (общий скрипт уже запустился при DOMContentLoaded,
+          // но к тому моменту data-client-type ещё не был проставлен).
+          if (window.rvUpdateGameLastUpdates) window.rvUpdateGameLastUpdates();
+          if (window.rvUpdateLastPlayed)      window.rvUpdateLastPlayed();
+        }
+      } catch (_) {}
+    }
+
+    // ── Open versions page via chevron in game card ──
+    document.getElementById('open-versions').addEventListener('click', (e) => {
+      e.stopPropagation();
+      navigateTo('versions.html');
+    });
+
+    // ── Window controls ──
+    document.getElementById('btn-hide').addEventListener('click', () => {
+      window.nativeHide?.().catch(() => {});
+    });
+    document.getElementById('btn-close').addEventListener('click', () => {
+      window.nativeClose?.().catch(() => {});
+    });
+
+    // ── Drag (top 44px strip) ──
+    // .titlebar visually sits at y=20..44 (after .app's 20px top padding) so a
+    // click in the topmost 20 pixels would otherwise miss the drag handler.
+    // Listen on body and gate by clientY < 44 so the entire top edge grabs.
+    const NODRAG = '#btn-hide,#btn-close,.account-pill,.logo-down,.popup';
+    document.body.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      if (e.clientY > 44) return;
+      if (e.target.closest(NODRAG)) return;
+      window.nativeDragMove?.().catch(() => {});
+    });
+
+    // ── Block right-click context menu (no Refresh / Save As / Inspect) ──
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // ── Account pill ──
+    const accountPill = document.getElementById('account-pill');
+    const pillDown    = accountPill.querySelector('.pill-down');
+
+    // ── Popups ──
+    const popupClient  = document.getElementById('popup-client');
+    const popupAccount = document.getElementById('popup-account');
+    const popupQuit    = document.getElementById('popup-quit');
+    const logoDown     = document.querySelector('.logo-down');
+    const btnQuit      = document.getElementById('btn-quit');
+
+    function closeAllPopups() {
+      popupClient.classList.remove('visible');
+      popupAccount.classList.remove('visible');
+      popupQuit.classList.remove('visible');
+    }
+
+    logoDown.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const wasOpen = popupClient.classList.contains('visible');
+      closeAllPopups();
+      if (!wasOpen) popupClient.classList.add('visible');
+    });
+
+    // Wire each popup-client item to its action via data-* attributes.
+    popupClient.addEventListener('click', (e) => {
+      const item = e.target.closest('.popup-item');
+      if (!item) return;
+      e.stopPropagation();
+      closeAllPopups();
+      if (item.dataset.url) {
+        window.nativeOpenUrl?.(item.dataset.url).catch(() => {});
+      } else if (item.dataset.nav) {
+        navigateTo(item.dataset.nav);
+      } else if (item.dataset.action === 'open-folder') {
+        window.nativeOpenFolder?.('').catch(() => {});
+      } else if (item.dataset.action === 'open-mods') {
+        window.nativeOpenUserMods?.().catch(() => {});
+      } else if (item.dataset.action === 'check-update') {
+        if (typeof checkAllUpdates === 'function') checkAllUpdates();
+      } else if (item.dataset.action === 'download-mod') {
+        runModDownload();
+      } else if (item.dataset.action === 'update-launcher') {
+        checkLauncherUpdate();
+      }
+    });
+
+    pillDown.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const wasOpen = popupAccount.classList.contains('visible');
+      closeAllPopups();
+      if (!wasOpen) popupAccount.classList.add('visible');
+    });
+
+    document.getElementById('btn-logout').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      closeAllPopups();
+      navigateTo('accounts.html');
+    });
+
+    btnQuit.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const wasOpen = popupQuit.classList.contains('visible');
+      closeAllPopups();
+      if (!wasOpen) popupQuit.classList.add('visible');
+    });
+
+    document.getElementById('quit-confirm').addEventListener('click', () => {
+      popupQuit.classList.remove('visible');
+      window.nativeClose?.().catch(() => {});
+    });
+    document.getElementById('quit-cancel').addEventListener('click', () => {
+      popupQuit.classList.remove('visible');
+    });
+
+    // Close popups on any click outside them
+    document.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.popup')) return;
+      if (e.target.closest('.logo-down') ||
+          e.target.closest('.pill-down') ||
+          e.target.closest('#btn-quit')) return;
+      closeAllPopups();
+    });
+
+    // Escape closes popups
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeAllPopups();
+    });
+
+    // ── Drag-to-scroll (Embla-like: mousedown + drag + inertia) ──
+    function enableDragScroll(el, axis) {
+      if (!el) return;
+      let isDown = false;
+      let startPos = 0;
+      let startScroll = 0;
+      let lastPos = 0;
+      let lastTime = 0;
+      let velocity = 0;
+      let rafId = null;
+      let moved = false;
+
+      const DRAG_THRESHOLD = 4;
+      const FRICTION = 0.93;
+
+      function cancelInertia() {
+        if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+      }
+
+      function inertiaStep() {
+        velocity *= FRICTION;
+        if (Math.abs(velocity) < 0.4) { rafId = null; return; }
+        if (axis === 'x') el.scrollLeft -= velocity;
+        else                el.scrollTop  -= velocity;
+        rafId = requestAnimationFrame(inertiaStep);
+      }
+
+      el.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        cancelInertia();
+        isDown = true;
+        moved = false;
+        startPos     = axis === 'x' ? e.pageX : e.pageY;
+        startScroll  = axis === 'x' ? el.scrollLeft : el.scrollTop;
+        lastPos      = startPos;
+        lastTime     = performance.now();
+        velocity     = 0;
+        e.stopPropagation(); // don't trigger native window drag
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isDown) return;
+        const pos   = axis === 'x' ? e.pageX : e.pageY;
+        const delta = pos - startPos;
+        if (!moved && Math.abs(delta) > DRAG_THRESHOLD) moved = true;
+        if (axis === 'x') el.scrollLeft = startScroll - delta;
+        else                el.scrollTop  = startScroll - delta;
+
+        const now = performance.now();
+        const dt  = now - lastTime;
+        if (dt > 0) velocity = ((pos - lastPos) / dt) * 16; // px per frame
+        lastPos  = pos;
+        lastTime = now;
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (!isDown) return;
+        isDown = false;
+        if (moved) {
+          rafId = requestAnimationFrame(inertiaStep);
+          // suppress the click that follows a drag
+          el._suppressClick = true;
+          setTimeout(() => { el._suppressClick = false; }, 60);
+        }
+      });
+
+      // Block click on children if we just dragged
+      el.addEventListener('click', (e) => {
+        if (el._suppressClick) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }, true);
+
+    }
+
+    enableDragScroll(document.querySelector('.ql-servers'),  'x');
+
+    // ── Launch flow ───────────────────────────────────────────────────────
+    const appEl       = document.getElementById('app');
+    const btnLaunch   = document.getElementById('btn-launch');
+    const launchBar   = document.getElementById('launch-bar');
+    const launchStat  = document.getElementById('launch-status');
+    const launchPct   = document.getElementById('launch-percent');
+    const patchBar    = document.getElementById('patch-bar');
+    const patchPct    = document.getElementById('patch-percent');
+    const patchSize   = document.getElementById('patch-size');
+    const toastSuccess = document.getElementById('toast-success');
+    const toastSuccessBar = document.getElementById('toast-success-bar');
+    const toastUpdate  = document.getElementById('toast-update');
+    const toastUpdateBar = document.getElementById('toast-update-bar');
+
+    const STATES = ['launching','patching','error','noaccess','disconnected','techworks'];
+    let launchTimers = [];
+
+    function clearLaunchTimers() {
+      launchTimers.forEach(clearTimeout);
+      launchTimers = [];
+    }
+
+    function setState(state) {
+      STATES.forEach(s => appEl.classList.remove('state-' + s));
+      if (state) appEl.classList.add('state-' + state);
+    }
+
+    function hideStateToast(el) {
+      el.classList.remove('visible');
+    }
+    function showToastMessage(title, body, totalMs = 3500) {
+      document.getElementById('toast-update-title').textContent = title || 'Обновление';
+      document.getElementById('toast-update-body').textContent = body || '';
+      showStateToast(toastUpdate, toastUpdateBar, totalMs);
+    }
+    function showStateToast(el, barEl, totalMs = 4000) {
+      hideStateToast(toastSuccess);
+      hideStateToast(toastUpdate);
+      barEl.style.transition = 'none';
+      barEl.style.width = '100%';
+      requestAnimationFrame(() => {
+        el.classList.add('visible');
+        requestAnimationFrame(() => {
+          barEl.style.transition = `width ${totalMs}ms linear`;
+          barEl.style.width = '0%';
+        });
+      });
+      launchTimers.push(setTimeout(() => hideStateToast(el), totalMs));
+    }
+
+    const LAUNCH_STEPS = [
+      { pct: 10,  text: 'Проверка целостности файлов...' },
+      { pct: 35,  text: 'Распаковка ресурсов...' },
+      { pct: 65,  text: 'И?нициализация Fabric...' },
+      { pct: 90,  text: 'Запуск Minecraft...' },
+      { pct: 100, text: 'Готово' },
+    ];
+
+    let launchPollHandle = null;
+    function stopLaunchPoll() {
+      if (launchPollHandle) { clearTimeout(launchPollHandle); launchPollHandle = null; }
+    }
+
+    let pendingLaunchServer = null;
+
+    // Мод не скачан / клиент отсутствует → предупреждаем, а не молча качаем.
+    function handleLaunchBlock(resp, quickPlayServer) {
+      if (resp && resp.code === 'MOD_MISSING') {
+        askInstallMod(quickPlayServer);
+        return true;
+      }
+      if (resp && resp.code === 'CLIENT_MISSING') {
+        pendingLaunchServer = null;
+        setState('error');
+        fillError('Клиент Minecraft не установлен. Скачайте его в пункте «Скачать мод» → «Установить клиент» или проверьте интернет.');
+        return true;
+      }
+      return false;
+    }
+
+    async function runLaunchSequence(quickPlayServer, forceNoMod) {
+      setState('launching');
+      launchBar.style.width = '4%';
+      launchPct.textContent = '4%';
+      launchStat.textContent = 'Подготовка к запуску...';
+
+      let resp;
+      let respDone = false;
+      let launchPromise = null;
+
+      // Поллинг прогресса идёт СРАЗУ (пока качаются мод/Java/клиент —
+      // строка состояния живёт), а не только после ответа launchStart.
+      const earlyProgress = setInterval(async () => {
+        if (respDone) { clearInterval(earlyProgress); return; }
+        let p;
+        try { p = await window.nativeLaunchProgress?.(); } catch (_) { return; }
+        if (!p) return;
+        const pct = Math.max(0, Math.min(100, Math.round(p.progress * 100)));
+        if (p.status) launchStat.textContent = p.status;
+        if (p.state === 'downloading' || p.state === 'checking' || p.state === 'verifying') {
+          launchBar.style.width = Math.max(4, pct) + '%';
+          launchPct.textContent = pct + '%';
+        }
+      }, 250);
+
+      launchPromise = window.nativeLaunchStart?.(quickPlayServer || '', !!forceNoMod);
+      try { resp = await launchPromise; }
+      catch (e) { resp = { ok: false, error: 'native call failed' }; }
+      respDone = true;
+      clearInterval(earlyProgress);
+
+      if (!resp || !resp.ok) {
+        if (handleLaunchBlock(resp, quickPlayServer)) return;
+        launchStat.textContent = (resp && resp.error) || 'Не удалось начать запуск';
+        setState('error');
+        return;
+      }
+
+      pollLaunch();
+    }
+
+    async function pollLaunch() {
+      let p;
+      try { p = await window.nativeLaunchProgress?.(); }
+      catch (_) { /* keep polling */ }
+
+      if (p) {
+        const pct = Math.max(0, Math.min(100, Math.round(p.progress * 100)));
+        launchBar.style.width = pct + '%';
+        launchPct.textContent = pct + '%';
+        if (p.status) launchStat.textContent = p.status;
+
+        if (p.state === 'running') {
+          // Game is launching — keep the overlay up at 100% until the launcher
+          // window is hidden by C++ (happens when the MC window is detected).
+          launchBar.style.width = '100%';
+          launchPct.textContent = '100%';
+          launchStat.textContent = 'Minecraft запускается, подождите…';
+
+          // Записываем факт запуска для текущей выбранной версии, чтобы
+          // показывать «И?грали N минут назад» на дашборде и в версиях.
+          try {
+            const versions = (await window.nativeGetVersions?.()) || [];
+            const sel = await window.nativeGetSelectedVersion?.();
+            const e = sel ? versions.find(v => v.id === sel) : null;
+            if (e && e.type && e.version && window.rvSetLastPlayed) {
+              window.rvSetLastPlayed(`${e.type}-${e.version}`);
+              if (window.rvUpdateLastPlayed) window.rvUpdateLastPlayed();
+            }
+          } catch (_) {}
+          return;
+        }
+        if (p.state === 'failed') {
+          launchStat.textContent = p.error || p.status || 'Запуск не удался';
+          fillError(p.error || p.status || '');
+          setState('error');
+          return;
+        }
+      }
+
+      launchPollHandle = setTimeout(pollLaunch, 300);
+    }
+
+    function applyOutcome(outcome) {
+      if (outcome === 'success') {
+        setState(null);
+        showStateToast(toastSuccess, toastSuccessBar, 4000);
+        return;
+      }
+      if (outcome === 'update') {
+        runPatchSequence();
+        return;
+      }
+      // error-like modal
+      setState(outcome); // 'error' | 'noaccess' | 'disconnected' | 'techworks'
+    }
+
+    // ── Понятные ошибки: по тексту сбоя подставляем заголовок, описание
+    //    и инструкцию «что делать». ──
+    function fillError(errText) {
+      const t = (errText || '').toLowerCase();
+      const title = document.getElementById('error-title');
+      const desc  = document.getElementById('error-desc');
+      const badge = document.getElementById('error-badge-text');
+      const steps = document.getElementById('error-steps');
+      const tip   = document.getElementById('error-tip');
+      let head = 'Сбой запуска';
+      let body = errText || 'Произошла неизвестная ошибка.';
+      let list = ['Попробуй запустить ещё раз.'];
+      let tipText = '';
+
+      if (t.includes('заблокирован') || t.includes('отладчик') || t.includes('реверс') || t.includes('анalиз') || t.includes('x64dbg') || t.includes('olly')) {
+        head = 'Запуск заблокирован защитой';
+        body = 'Лаунчер обнаружил отладчик или реверс-инструмент и остановил запуск.';
+        list = ['Закрой все отладчики и снифферы (x64dbg, OllyDbg, Cheat Engine, Frida и т.п.).', 'Удали лишние «античит»-процессы из фона.', 'Запусти лаунчер заново.'];
+      } else if (t.includes('java') || t.includes('jre')) {
+        head = 'Проблема с встроенной Java';
+        body = 'Не удалось запустить встроенную Java 21.';
+        list = ['Перезапусти лаунчер (Java переустановится сама).', 'Если не помогло — скачай лаунчер заново с сайта.'];
+      } else if (t.includes('minecraft не установлен') || t.includes('клиент') || t.includes('установить minecraft')) {
+        head = 'Minecraft не установлен';
+        body = 'Клиент не найден или не докачался.';
+        list = ['Проверь интернет (без VPN сайт может работать медленно).', 'Запусти игру ещё раз — лаунчер сам скачает клиент.', 'Если качает долго — дождись 100%.'];
+      } else if (t.includes('мод') || t.includes('jar') || t.includes('fabric')) {
+        head = 'Не удалось установить мод';
+        body = 'Мод EnergyUtils не установился или повреждён.';
+        list = ['Проверь, что в папке модов нет ДВУХ jar с одним модом.', 'Удали мод вручную (C:\\EnergyUtils\\game\\mods) и запусти заново.', 'Если есть свой «оригинальный» jar — оставь ТОЛЬКО один.'];
+      } else if (t.includes('соедин') || t.includes('связь') || t.includes('unreachable') || t.includes('network') || t.includes('timeout') || t.includes('нет соединения')) {
+        head = 'Нет соединения с сервером';
+        body = 'Лаунчер не смог достучаться до сервера обновлений.';
+        list = ['Проверь интернет.', 'Без VPN сайт может работать очень медленно — включи VPN и попробуй снова.', 'Либо просто запусти игру со старыми файлами — они уже на месте.'];
+        tipText = 'Совет: мод и клиент уже установлены — если игра запускалась раньше, обновление не обязательно.';
+      } else if (t.includes('память') || t.includes('outofmemory') || t.includes('xmx')) {
+        head = 'Не хватает памяти';
+        body = 'Игре не хватило выделенной памяти.';
+        list = ['Увеличь ОЗУ в Настройках (4–8 ГБ).', 'Закрой лишние программы.', 'Перезапусти игру.'];
+      } else if (t.includes('отказано') || t.includes('permission') || t.includes('доступ')) {
+        head = 'Нет доступа к файлам';
+        body = 'Лаунчеру не хватает прав на работу с файлами игры.';
+        list = ['Запусти лаунчер от имени администратора.', 'Проверь антивирус (он мог заблокировать файлы).'];
+      }
+
+      if (title) title.textContent = head;
+      if (desc)  desc.textContent  = body;
+      if (badge) badge.textContent = 'Ошибка';
+      if (steps) {
+        steps.innerHTML = '';
+        list.forEach(s => { const li = document.createElement('li'); li.textContent = s; steps.appendChild(li); });
+      }
+      if (tip) {
+        if (tipText) { tip.style.display = 'block'; tip.textContent = tipText; }
+        else tip.style.display = 'none';
+      }
+    }
+
+    function runPatchSequence() {
+      setState('patching');
+      showStateToast(toastUpdate, toastUpdateBar, 6000);
+
+      const TOTAL = 450;
+      let mb = 5;
+      patchBar.style.width = '4%';
+      patchPct.textContent = '4%';
+      patchSize.textContent = `${mb} MB из ${TOTAL} MB`;
+
+      // 6 ticks over ~5s
+      for (let i = 1; i <= 6; i++) {
+        launchTimers.push(setTimeout(() => {
+          const ratio = i / 6;
+          const pct = Math.round(ratio * 100);
+          const done = Math.round(ratio * TOTAL);
+          patchBar.style.width = pct + '%';
+          patchPct.textContent = pct + '%';
+          patchSize.textContent = `${done} MB из ${TOTAL} MB`;
+        }, i * 800));
+      }
+      // When patch finishes — go back to idle
+      launchTimers.push(setTimeout(() => setState(null), 6 * 800 + 400));
+    }
+
+    btnLaunch.addEventListener('click', () => {
+      if (btnLaunch.disabled || btnLaunch.classList.contains('disabled')) return;
+      if (appEl.className.indexOf('state-') !== -1) return; // already in some state
+      runLaunchSequence();
+    });
+
+    // Quick-launch server pills — click = launch with --quickPlayMultiplayer /
+    // --server pointing at the pill's data-server IP. Guards mirror btnLaunch
+    // so you can't fire mid-launch.
+    document.querySelectorAll('.server-pill[data-server]').forEach(pill => {
+      pill.addEventListener('click', () => {
+        if (btnLaunch.disabled || btnLaunch.classList.contains('disabled')) return;
+        if (appEl.className.indexOf('state-') !== -1) return;
+        const ip = pill.dataset.server;
+        if (!ip) return;
+        runLaunchSequence(ip);
+      });
+    });
+
+    // Cancel / close handlers — back to idle dashboard
+    document.getElementById('launch-cancel').addEventListener('click', () => {
+      stopLaunchPoll();
+      clearLaunchTimers();
+      window.nativeLaunchCancel?.().catch(() => {});
+      setState(null);
+    });
+    document.getElementById('patch-cancel').addEventListener('click', () => {
+      clearLaunchTimers();
+      hideStateToast(toastUpdate);
+      setState(null);
+    });
+    document.querySelectorAll('.state-close').forEach(btn => {
+      btn.addEventListener('click', () => {
+        stopLaunchPoll();
+        clearLaunchTimers();
+        setState(null);
+      });
+    });
+
+    // Escape closes any state overlay
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (appEl.className.indexOf('state-') !== -1) {
+        clearLaunchTimers();
+        setState(null);
+      }
+    });
+  </script>
+</body>
+</html>

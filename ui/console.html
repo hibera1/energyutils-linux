@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>EnergyUtils — консоль</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html,body { width:100%; height:100%; overflow:hidden; background:#0e0e12; }
+    body { display:flex; flex-direction:column; font-family:Consolas, 'Courier New', monospace; }
+    .bar {
+      display:flex; align-items:center; gap:10px; padding:8px 12px;
+      background:#16161c; border-bottom:1px solid #26262e; color:#d8d8d8;
+      -webkit-app-region: drag; user-select:none; font-size:12px;
+    }
+    .bar .title { flex:1; font-weight:600; letter-spacing:.3px; color:#a78bfa; }
+    .bar .status { font-size:11px; color:#656571; }
+    .bar .pin { -webkit-app-region:no-drag; }
+    #out {
+      flex:1; overflow:auto; padding:10px 12px;
+      color:#c9d4e3; font-size:12px; line-height:1.55; white-space:pre-wrap; word-break:break-word;
+    }
+    #out .err { color:#ff8a8a; }
+    #out .ok  { color:#7ee2a8; }
+    #kick {
+      max-height:140px; overflow:auto; padding:10px 12px; border-top:1px solid #26262e;
+      background:#180f12; color:#ffb4b4; font-size:12px; line-height:1.5; white-space:pre-wrap;
+    }
+    #empty { color:#3d3d47; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <span class="title">EnergyUtils — консоль запуска</span>
+    <span class="status" id="status">игра не запущена</span>
+    <span class="pin" style="width:64px;"></span>
+  </div>
+  <div id="out"></div>
+  <div id="kick" style="display:none;"></div>
+  <script>
+    const out = document.getElementById('out');
+    const kick = document.getElementById('kick');
+    const status = document.getElementById('status');
+    let lastTail = '';
+    let lastKick = '';
+
+    function esc(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    async function refresh() {
+      try {
+        const info = await window.nativeGetDevToolsInfo?.();
+        if (!info) return;
+        const log = info.consoleLog || '';
+        // Показываем только хвост последней сессии (после последнего ==== Запуск)
+        const marker = '===== Запуск';
+        let tail = log;
+        const lastIdx = log.lastIndexOf(marker);
+        if (lastIdx > -1) tail = log.slice(lastIdx);
+        const lines = tail.split(/\n/);
+        const slice = lines.slice(-500);
+        const text = slice.join('\n');
+        if (text !== lastTail) {
+          out.innerHTML = '';
+          const hasContent = slice.some(l => l.trim().length > 0);
+          if (!hasContent) {
+            out.innerHTML = '<span id="empty">Консоль пуста. Нажми «Запустить» — сюда пойдёт вывод Minecraft.</span>';
+          } else {
+            slice.forEach(l => {
+              const div = document.createElement('div');
+              const low = l.toLowerCase();
+              if (low.includes('error') || low.includes('exception') || low.includes('fatal') || low.includes('failed')) div.className = 'err';
+              else if (low.includes('loading minecraft') || low.includes('started') || low.includes('done')) div.className = 'ok';
+              div.textContent = l;
+              out.appendChild(div);
+            });
+          }
+          out.scrollTop = out.scrollHeight;
+          lastTail = text;
+        }
+        // Кик
+        const kickStr = info.lastKick ? (info.lastKick.file + '\n' + info.lastKick.preview) : '';
+        if (kickStr !== lastKick) {
+          lastKick = kickStr;
+          if (kickStr) { kick.style.display = 'block'; kick.textContent = '💥 ' + kickStr; }
+          else kick.style.display = 'none';
+        }
+        if (info.lastKick) status.textContent = 'после краша';
+        else if (hasGame()) status.textContent = 'игра запущена или завершена';
+      } catch (_) {}
+    }
+
+    function hasGame() {
+      return !!document.querySelector('.ok');
+    }
+
+    setInterval(refresh, 700);
+    refresh();
+  </script>
+</body>
+</html>

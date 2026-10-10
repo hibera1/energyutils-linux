@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>EnergyUtils — Аккаунты</title>
+  <script src="../assets/scripts/rv-launcher-common.js" defer></script>
+  <script src="../assets/scripts/eu-i18n.js" defer></script>
+  <style>
+    @font-face {
+      font-family: 'Onest';
+      src: url('../assets/fonts/Onest-Regular.ttf') format('truetype');
+      font-weight: 400; font-style: normal;
+    }
+    @font-face {
+      font-family: 'Onest';
+      src: url('../assets/fonts/Onest-Medium.ttf') format('truetype');
+      font-weight: 500; font-style: normal;
+    }
+    @font-face {
+      font-family: 'Onest';
+      src: url('../assets/fonts/Onest-SemiBold.ttf') format('truetype');
+      font-weight: 600; font-style: normal;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    ::-webkit-scrollbar { display: none; }
+
+    html, body {
+      width: 1120px; height: 650px;
+      overflow: hidden;
+      background: #141417;
+      font-family: 'Onest', sans-serif;
+      user-select: none;
+    }
+
+    /* Page fade-in — only content fades */
+    .main-content > *:not(.sidebar):not(.popup):not(.state-overlay) {
+      opacity: 0;
+      transition: opacity 0.22s ease;
+    }
+    body.ready .main-content > *:not(.sidebar):not(.popup):not(.state-overlay) {
+      opacity: 1;
+    }
+
+    /* ── App root ── */
+    .app {
+      width: 1120px; height: 650px;
+      padding: 20px 24px 24px 24px;
+      display: flex; flex-direction: column; gap: 18px;
+      background: #141417;
+      border: 1px solid #1C1C20;
+      box-shadow: 0 34px 58.4px #141417;
+      border-radius: 8px;
+    }
+
+    /* ── Titlebar (shared) ── */
+    .titlebar {
+      display: flex; flex-direction: row;
+      justify-content: space-between; align-items: center;
+      width: 100%; height: 24px; flex-shrink: 0;
+    }
+    .titlebar-left  { display: flex; align-items: center; gap: 24px; }
+    .titlebar-right { display: flex; align-items: center; gap: 24px; }
+
+    .logo { display: flex; align-items: center; gap: 8px; }
+    .logo-icon { width: 24px; height: 12px; display: flex; align-items: center; flex-shrink: 0; }
+    .logo-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .logo-text { font-weight: 500; font-size: 12px; color: #FFFFFF; }
+    .logo-down {
+      width: 12px; height: 12px; display: flex; align-items: center;
+      flex-shrink: 0; cursor: pointer;
+    }
+    .logo-down img { width: 100%; height: 100%; filter: brightness(0) invert(0.4); transition: filter 0.15s; }
+    .logo-down:hover img { filter: brightness(0) invert(1); }
+
+    .account-pill {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 8px; height: 24px;
+      background: #18181C; border-radius: 4px; cursor: pointer;
+    }
+    .pill-info { display: flex; align-items: center; gap: 4px; }
+    .pill-username { font-weight: 500; font-size: 13px; color: #D8D8D8; }
+    .pill-dot { width: 6px; height: 6px; background: #14CF7E; border-radius: 50%; flex-shrink: 0; }
+    .pill-down { width: 12px; height: 12px; display: flex; align-items: center; cursor: pointer; }
+    .pill-down img { width: 100%; height: 100%; filter: brightness(0) invert(0.4); transition: filter 0.15s; }
+    .pill-down:hover img { filter: brightness(0) invert(1); }
+
+    .window-controls { display: flex; align-items: center; gap: 8px; }
+    .btn-wc {
+      width: 24px; height: 24px;
+      display: flex; align-items: center; justify-content: center;
+      border: none; background: none; padding: 0; cursor: pointer;
+    }
+    .btn-wc img {
+      width: 100%; height: 100%; display: block;
+      filter: brightness(0) invert(0.4);
+      transition: filter 0.15s;
+    }
+    .btn-wc:hover img  { filter: brightness(0) invert(1); }
+    .btn-wc:active img { filter: brightness(0) invert(0.7); }
+
+    /* ── Main layout ── */
+    .main-content {
+      display: flex; flex-direction: row;
+      gap: 12px; flex: 1; min-height: 0;
+      position: relative;
+    }
+
+    /* Sidebar (shared) */
+    .sidebar {
+      width: 56px; flex-shrink: 0;
+      display: flex; flex-direction: column;
+      justify-content: space-between;
+      overflow: visible;
+      margin-left: -12px;
+    }
+    .nav-top { display: flex; flex-direction: column; gap: 4px; }
+    .nav-btn {
+      position: relative;
+      width: 56px; height: 56px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      border-radius: 12px; border: none; background: none;
+      padding: 12px 16px;
+      cursor: pointer;
+      overflow: hidden;
+      transition: padding 0.18s ease;
+    }
+    .nav-btn.active { background: #18181C; cursor: default; }
+    .nav-btn img {
+      width: 24px; height: 24px; display: block; flex-shrink: 0;
+      filter: brightness(0) invert(0.4);
+      transition: transform 0.18s ease, filter 0.18s ease;
+      position: relative; z-index: 1;
+    }
+    .nav-btn.active img {
+      filter: brightness(0) saturate(200%) invert(55%) sepia(90%)
+              saturate(800%) hue-rotate(230deg) brightness(105%);
+    }
+    .nav-label {
+      position: absolute; bottom: 8px;
+      left: 50%; transform: translateX(-50%) translateY(120%);
+      opacity: 0;
+      font-weight: 500; font-size: 11px; color: #656571;
+      white-space: nowrap;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      pointer-events: none; z-index: 0;
+    }
+    .nav-btn:not(.active):hover { padding: 8px 16px; }
+    .nav-btn:not(.active):hover img {
+      transform: translateY(-6px);
+      filter: brightness(0) invert(1);
+    }
+    .nav-btn:not(.active):hover .nav-label {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .nav-btn.nav-quit:hover { padding: 12px 16px; }
+    .nav-btn.nav-quit:hover img {
+      transform: translateX(-3px);
+      filter: brightness(0) saturate(100%) invert(56%) sepia(93%)
+              saturate(2605%) hue-rotate(324deg) brightness(104%) contrast(102%);
+    }
+
+    /* ── Views (empty / manager) ── */
+    .view {
+      flex: 1; min-width: 0;
+      display: none;
+    }
+    .view.active { display: flex; }
+
+    /* ── Empty state ── */
+    .view-empty {
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+      gap: 24px;
+    }
+    .empty-heading {
+      display: flex; flex-direction: column; gap: 24px;
+      width: 100%;
+    }
+    .empty-title {
+      font-weight: 600; font-size: 24px; line-height: 31px;
+      text-align: center; color: #FFFFFF;
+    }
+    .empty-subtitle {
+      font-weight: 500; font-size: 15px; line-height: 19px;
+      text-align: center; color: #656571;
+    }
+
+    /* ── Auth cards (local + microsoft) ── */
+    .auth-cards {
+      display: flex; flex-direction: row;
+      justify-content: center;
+      gap: 12px;
+      width: 476px;
+    }
+    .auth-card {
+      width: 232px; height: 291px;
+      display: flex; flex-direction: column;
+      justify-content: flex-end;
+      padding: 16px; gap: 12px;
+      border: 1px solid #1C1C20;
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
+    }
+    .auth-card::before {
+      content: '';
+      position: absolute; inset: 0;
+      background:
+        linear-gradient(180deg, rgba(20,20,23,0.7) 0%, #141417 80%),
+        var(--bg, linear-gradient(135deg, #1a1a2e 0%, #16213e 100%));
+      background-size: cover;
+      background-position: center;
+      z-index: 0;
+    }
+    .auth-card > * { position: relative; z-index: 1; }
+
+    .auth-card-local { --bg: url('../assets/icons/wallpaper_minecraft_caves_cliffs.png'); }
+    .auth-card-ms    { --bg: url('../assets/icons/wallpaper_minecraft_microsoft.png'); }
+
+    .auth-card-title {
+      font-weight: 500; font-size: 15px; line-height: 19px;
+      color: #FFFFFF;
+    }
+    .auth-card-sub {
+      font-weight: 400; font-size: 13px; line-height: 17px;
+      color: #656571;
+    }
+
+    /* Nickname input */
+    .nick-field {
+      display: flex; align-items: center;
+      gap: 4px;
+      padding: 0 16px;
+      height: 48px;
+      background: #151517;
+      border: 1px solid #1C1C20;
+      border-radius: 8px;
+      transition: border-color 0.15s;
+    }
+    .nick-field:focus-within { border-color: #303037; }
+    .nick-input {
+      flex: 1; min-width: 0;
+      background: transparent; border: none; outline: none;
+      font-family: 'Onest', sans-serif;
+      font-weight: 400; font-size: 14px; line-height: 18px;
+      color: #FFFFFF;
+    }
+    .nick-input::placeholder { color: #656571; }
+    .nick-random {
+      width: 16px; height: 16px;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: none; border: none; padding: 0;
+      cursor: pointer;
+      color: #656571;
+      transition: color 0.15s;
+    }
+    .nick-random:hover { color: #FFFFFF; }
+
+    /* Microsoft button */
+    .ms-btn {
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px;
+      padding: 12px 16px;
+      height: 40px;
+      background: #18181C;
+      border: 1px solid #1C1C20;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: 'Onest', sans-serif;
+      font-weight: 500; font-size: 12px;
+      color: #D8D8D8;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .ms-btn:hover { background: #1C1C20; border-color: #303037; color: #FFFFFF; }
+    .ms-logo {
+      width: 16px; height: 16px; flex-shrink: 0;
+      display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
+      gap: 1px;
+    }
+    .ms-logo div { border-radius: 2px; }
+    .ms-logo div:nth-child(1) { background: #F1511B; }
+    .ms-logo div:nth-child(2) { background: #80CC28; }
+    .ms-logo div:nth-child(3) { background: #00ADEF; }
+    .ms-logo div:nth-child(4) { background: #FBBC09; }
+
+    /* ── Manager state (list + preview) ── */
+    .view-manager {
+      flex-direction: column;
+      padding: 24px;
+      gap: 16px;
+    }
+    .manager-title {
+      font-weight: 600; font-size: 24px; line-height: 1;
+      color: #FFFFFF;
+      flex-shrink: 0;
+    }
+    .search-row {
+      display: flex; flex-direction: row;
+      align-items: center;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+    .search-field {
+      flex: 1; min-width: 0;
+      display: flex; align-items: center;
+      gap: 4px;
+      padding: 0 16px;
+      height: 48px;
+      background: #151517;
+      border: 1px solid #1C1C20;
+      border-radius: 8px;
+      transition: border-color 0.15s;
+    }
+    .search-field:focus-within { border-color: #303037; }
+    .search-field svg { flex-shrink: 0; color: #656571; }
+    .search-input {
+      flex: 1; min-width: 0;
+      background: transparent; border: none; outline: none;
+      font-family: 'Onest', sans-serif;
+      font-weight: 400; font-size: 14px; line-height: 18px;
+      color: #FFFFFF;
+    }
+    .search-input::placeholder { color: #656571; }
+    .icon-btn {
+      width: 48px; height: 48px;
+      display: flex; align-items: center; justify-content: center;
+      background: transparent;
+      border: 1px solid #1C1C20;
+      border-radius: 8px;
+      cursor: pointer;
+      color: #656571;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .icon-btn:hover { background: #18181C; color: #FFFFFF; border-color: #303037; }
+
+    .filter-wrap { position: relative; flex-shrink: 0; }
+    .filter-popup {
+      position: absolute; top: calc(100% + 6px); right: 0;
+      background: #18181C; border: 1px solid #1F1F23;
+      border-radius: 8px;
+      padding: 4px;
+      min-width: 140px;
+      display: none;
+      z-index: 50;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    .filter-popup.visible { display: block; }
+    .filter-item {
+      padding: 8px 12px;
+      font-size: 13px; color: #B0B0B6;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+    }
+    .filter-item:hover { background: #1C1C20; color: #FFFFFF; }
+    .filter-item.active { color: #8b5cf6; }
+
+    /* Accounts grid (scrolling) */
+    .accounts-grid {
+      flex: 1; min-height: 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-content: flex-start;
+      overflow-y: scroll;
+      padding-bottom: 8px;
+    }
+    .acc-card {
+      height: 123px;
+      padding: 12px;
+      display: flex; flex-direction: column;
+      justify-content: space-between;
+      background: #151517;
+      border: 1px solid #1C1C20;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .acc-card:hover { border-color: #303037; }
+    .acc-card.selected { background: #1C1C20; border-color: #303037; }
+
+    .acc-top {
+      display: flex; flex-direction: row;
+      justify-content: space-between; align-items: flex-start;
+      gap: 12px;
+    }
+    .acc-skin {
+      width: 48px; height: 48px;
+      flex-shrink: 0;
+      border-radius: 4px;
+      background: #1C1C20;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 600; font-size: 20px;
+      color: #FFFFFF;
+      overflow: hidden;
+    }
+    .acc-skin img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      image-rendering: pixelated; /* keep MC face crisp */
+      display: block;
+    }
+    .acc-type-badge {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px;
+      height: 24px;
+      background: #1C1C20;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .acc-type-badge .ms-logo,
+    .acc-type-badge svg { width: 16px; height: 16px; }
+    .acc-type-badge span {
+      font-weight: 500; font-size: 11px; line-height: 14px;
+      color: #D8D8D8;
+    }
+
+    .acc-bot {
+      display: flex; flex-direction: row;
+      justify-content: space-between; align-items: flex-end;
+      gap: 12px;
+    }
+    .acc-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+    .acc-name {
+      font-weight: 500; font-size: 16px; line-height: 20px;
+      color: #FFFFFF;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .acc-card:not(.selected) .acc-name { color: #D8D8D8; }
+    .acc-date {
+      font-weight: 400; font-size: 12px; line-height: 15px;
+      color: #656571;
+    }
+    .acc-card:not(.selected) .acc-date { opacity: 0.5; }
+    .acc-selected-pill {
+      padding: 6px;
+      background: rgba(139, 92, 246, 0.5);
+      border-radius: 4px;
+      font-weight: 500; font-size: 10px; line-height: 13px;
+      color: #8b5cf6;
+      flex-shrink: 0;
+    }
+
+    /* "Add account" card */
+    .acc-card-add {
+      height: 123px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 8px;
+      background: #141417;
+      border: 1px dashed #1C1C20;
+      border-radius: 12px;
+      cursor: pointer;
+      color: #656571;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    .acc-card-add:hover {
+      border-color: #303037;
+      color: #FFFFFF;
+      background: #151517;
+    }
+    .acc-card-add svg { width: 24px; height: 24px; }
+    .acc-card-add-text {
+      font-weight: 400; font-size: 12px;
+    }
+
+    /* ── Preview panel ── */
+    .preview-panel {
+      width: 290px; flex-shrink: 0;
+      display: flex; flex-direction: column;
+      padding: 24px;
+      gap: 24px;
+      background: #151517;
+      border: 1px solid #1C1C20;
+      border-radius: 12px;
+      position: relative;
+      overflow: hidden;
+      isolation: isolate;
+    }
+    .preview-panel.disabled { opacity: 0.5; }
+
+    .preview-body {
+      display: flex; justify-content: center;
+      flex-shrink: 0;
+    }
+    .preview-badge-nick {
+      display: flex; align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: #1C1C20;
+      border-radius: 4px;
+    }
+    .preview-badge-nick svg { width: 14px; height: 15px; color: #656571; }
+    .preview-badge-nick span {
+      font-weight: 500; font-size: 15px; line-height: 19px;
+      color: #D8D8D8;
+    }
+
+    .preview-type {
+      display: flex; align-items: center;
+      gap: 8px;
+      padding: 4px;
+      height: 24px;
+      width: fit-content;
+      background: #1C1C20;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .preview-type .ms-logo,
+    .preview-type svg { width: 16px; height: 16px; }
+    .preview-type span {
+      font-weight: 500; font-size: 11px;
+      color: #D8D8D8;
+    }
+
+    .preview-nick-row {
+      display: flex; flex-direction: column;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .preview-nick-main {
+      display: flex; flex-direction: row; align-items: center;
+      gap: 6px;
+    }
+    .preview-nick-name {
+      font-weight: 500; font-size: 20px; line-height: 26px;
+      color: #FFFFFF;
+      max-width: 100%;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .preview-copy {
+      width: 24px; height: 24px;
+      display: flex; align-items: center; justify-content: center;
+      background: none; border: none; padding: 0;
+      cursor: pointer;
+      color: #656571;
+      transition: color 0.15s;
+    }
+    .preview-copy:hover { color: #FFFFFF; }
+    .preview-date {
+      font-weight: 400; font-size: 12px; line-height: 15px;
+      color: #656571;
+    }
+
+    .preview-select-btn {
+      display: flex; align-items: center; justify-content: center;
+      padding: 12px 16px;
+      height: 40px;
+      background: #1C1C20;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: 'Onest', sans-serif;
+      font-weight: 500; font-size: 12px;
+      color: #656571;
+      flex-shrink: 0;
+      transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+    }
+    .preview-select-btn:hover:not(.current) {
+      background: #8b5cf6;
+      color: #FFFFFF;
+      box-shadow: 0 5px 16px rgba(139, 92, 246, 0.34);
+    }
+    .preview-select-btn.current { cursor: default; opacity: 0.7; }
+
+    .preview-actions {
+      display: flex; flex-direction: row;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .preview-action {
+      height: 32px;
+      padding: 8px;
+      display: flex; align-items: center;
+      gap: 8px;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      color: #656571;
+      font-family: 'Onest', sans-serif;
+      font-weight: 500; font-size: 13px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .preview-action:hover { background: #1C1C20; color: #D8D8D8; }
+    .preview-action.delete:hover { color: #FF6363; }
+    .preview-action svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .preview-action-label { white-space: nowrap; }
+    .preview-action-icon-only { width: 32px; padding: 8px; justify-content: center; }
+
+    .preview-empty {
+      flex: 1;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 12px;
+      color: #656571;
+      text-align: center;
+      font-weight: 500; font-size: 13px;
+    }
+    .preview-empty svg { width: 48px; height: 48px; opacity: 0.4; }
+
+    /* ── New account modal ── */
+    .modal-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(20, 20, 23, 0.7);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      border-radius: 8px;
+    }
+    .modal-overlay.visible { display: flex; }
+    .modal-content {
+      display: flex; flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      width: 476px;
+    }
+    .modal-close {
+      position: absolute;
+      top: 24px; right: 24px;
+      width: 32px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
+      background: #18181C;
+      border: 1px solid #1C1C20;
+      border-radius: 8px;
+      cursor: pointer;
+      color: #656571;
+      transition: color 0.15s, background 0.15s;
+    }
+    .modal-close:hover { color: #FFFFFF; background: #1C1C20; }
+
+    /* ── Microsoft login modal ── */
+    .ms-login-content { width: 420px; gap: 16px; }
+    .ms-code-box {
+      width: 100%;
+      background: #18181C;
+      border: 1px solid #1C1C20;
+      border-radius: 8px;
+      padding: 16px 20px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .ms-code-label { font-size: 12px; color: #656571; font-weight: 500; }
+    .ms-code-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .ms-code-value {
+      font-size: 28px; font-weight: 600; color: #FFFFFF;
+      letter-spacing: 4px; user-select: all;
+    }
+    .ms-code-copy {
+      width: 32px; height: 32px;
+      background: #141417;
+      border: 1px solid #1C1C20;
+      border-radius: 6px;
+      color: #656571; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: color 0.15s, background 0.15s, border-color 0.15s;
+    }
+    .ms-code-copy:hover { color: #FFFFFF; background: #1C1C20; border-color: #303037; }
+    .ms-status {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: #656571; font-weight: 500;
+      min-height: 18px;
+    }
+    .ms-status.error   { color: #FF6363; }
+    .ms-status.success { color: #5AC26D; }
+    .ms-status-spinner {
+      width: 12px; height: 12px;
+      border: 2px solid #2a2a30;
+      border-top-color: #FFFFFF;
+      border-radius: 50%;
+      animation: ms-spin 0.7s linear infinite;
+    }
+    .ms-status.error   .ms-status-spinner,
+    .ms-status.success .ms-status-spinner { display: none; }
+    @keyframes ms-spin { to { transform: rotate(360deg); } }
+
+    /* ── Popups (shared) ── */
+    .popup {
+      position: absolute;
+      display: flex; flex-direction: column;
+      align-items: stretch;
+      padding: 12px; gap: 8px;
+      background: #151517;
+      border: 1px solid #1C1C20;
+      box-shadow: 0 34px 58.4px #141417;
+      border-radius: 8px;
+      z-index: 100;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.18s ease, visibility 0s linear 0.18s;
+    }
+    .popup.visible {
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 0.18s ease, visibility 0s linear 0s;
+    }
+    .popup-client { width: 234px; top: 56px; left: 24px; }
+    .popup-account { width: 167px; top: 56px; right: 80px; }
+
+    .popup-item {
+      display: flex; flex-direction: row; align-items: center;
+      padding: 8px; gap: 8px;
+      border-radius: 4px; cursor: pointer;
+      transition: background 0.12s;
+    }
+    .popup-item:hover { background: #18181C; }
+    .popup-item-icon { width: 16px; height: 16px; flex-shrink: 0; }
+    .popup-item-icon img {
+      width: 100%; height: 100%;
+      filter: brightness(0) invert(0.4);
+      transition: filter 0.12s;
+    }
+    .popup-item:hover .popup-item-icon img { filter: brightness(0) invert(0.85); }
+    .popup-item-product { cursor: default; opacity: 0.55; }
+    .popup-item-product:hover { background: transparent; }
+    .popup-item.popup-item-product .popup-item-icon img { filter: none; }
+    .popup-item-label {
+      flex: 1;
+      font-weight: 500; font-size: 13px; color: #D8D8D8;
+    }
+    .popup-divider { height: 1px; width: 100%; background: #656571; opacity: 0.2; }
+
+    /* Quit popup */
+    .popup-quit {
+      width: 234px;
+      bottom: 0;
+      left: 68px;
+      padding: 16px;
+      gap: 16px;
+    }
+    .popup-quit-header { display: flex; align-items: center; gap: 8px; width: 100%; }
+    .popup-quit-icon { width: 16px; height: 16px; flex-shrink: 0; }
+    .popup-quit-icon img {
+      width: 100%; height: 100%;
+      filter: brightness(0) saturate(100%) invert(56%) sepia(93%)
+              saturate(2605%) hue-rotate(324deg) brightness(104%) contrast(102%);
+    }
+    .popup-quit-title { font-weight: 500; font-size: 15px; line-height: 19px; color: #FFFFFF; }
+    .popup-quit-desc { font-weight: 500; font-size: 13px; line-height: 17px; color: #656571; width: 100%; }
+    .popup-quit-actions { display: flex; flex-direction: row; gap: 8px; width: 100%; }
+    .popup-quit-actions button {
+      padding: 8px 12px; height: 33px;
+      border: none; background: transparent;
+      border-radius: 4px; cursor: pointer;
+      font-family: 'Onest', sans-serif;
+      font-weight: 500; font-size: 13px; line-height: 17px;
+      color: #D8D8D8;
+      transition: background 0.12s, color 0.12s;
+    }
+    .popup-quit-confirm { flex: 1; }
+    .popup-quit-confirm:hover { background: #1C1C20; color: #FF6363; }
+    .popup-quit-cancel { flex-shrink: 0; }
+    .popup-quit-cancel:hover { background: #18181C; color: #FFFFFF; }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+
+    <!-- Titlebar -->
+    <div class="titlebar">
+      <div class="titlebar-left">
+        <div class="logo">
+          <div class="logo-icon"><img src="../assets/icons/logo.svg" alt=""></div>
+          <span class="logo-text">EnergyUtils</span>
+          <div class="logo-down"><img src="../assets/icons/down.svg" alt=""></div>
+        </div>
+      </div>
+      <div class="titlebar-right">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div class="account-pill" id="account-pill">
+            <div class="pill-info">
+              <span class="pill-username"></span><script>(function(){var c=window.__rvCache;if(!c){try{c=JSON.parse(localStorage.getItem('rv_user')||'null');}catch(_){}}if(c&&c.username)document.currentScript.previousElementSibling.textContent=c.username;})();</script>
+              <div class="pill-dot"></div>
+            </div>
+            <div class="pill-down"><img src="../assets/icons/down.svg" alt=""></div>
+          </div>
+        </div>
+        <div class="window-controls">
+          <button class="btn-wc" id="btn-hide"><img src="../assets/icons/hide.svg" alt=""></button>
+          <button class="btn-wc" id="btn-close"><img src="../assets/icons/close.svg" alt=""></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main content -->
+    <div class="main-content">
+
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="nav-top">
+          <button class="nav-btn" onclick="navigateTo('dashboard.html')">
+            <img src="../assets/icons/home.svg" alt="">
+            <span class="nav-label">Главная</span>
+          </button>
+          <button class="nav-btn" onclick="navigateTo('versions.html')">
+            <img src="../assets/icons/puzzle.svg" alt="">
+            <span class="nav-label">Версии</span>
+          </button>
+          <button class="nav-btn" onclick="navigateTo('mods.html')">
+            <img src="../assets/icons/import.svg" alt="">
+            <span class="nav-label">Моды</span>
+          </button>
+          <button class="nav-btn active">
+            <img src="../assets/icons/person.png" alt="">
+            <span class="nav-label">Аккаунты</span>
+          </button>
+          <button class="nav-btn" onclick="navigateTo('settings.html')">
+            <img src="../assets/icons/settings.svg" alt="">
+            <span class="nav-label">Настройки</span>
+          </button>
+        </div>
+        <button class="nav-btn nav-quit" id="btn-quit">
+          <img src="../assets/icons/quit.svg" alt="">
+        </button>
+      </div>
+
+      <!-- Quit popup -->
+      <div class="popup popup-quit" id="popup-quit">
+        <div class="popup-quit-header">
+          <div class="popup-quit-icon"><img src="../assets/icons/quit.svg" alt=""></div>
+          <span class="popup-quit-title">Выход</span>
+        </div>
+        <p class="popup-quit-desc">Закрыть EnergyUtils?</p>
+        <div class="popup-quit-actions">
+          <button class="popup-quit-confirm" id="quit-confirm">Подтверждаю</button>
+          <button class="popup-quit-cancel"  id="quit-cancel">Остаться</button>
+        </div>
+      </div>
+
+      <!-- ── Empty state ── -->
+      <div class="view view-empty" id="view-empty">
+        <div class="empty-heading">
+          <h1 class="empty-title">Аккаунты не добавлены ;(</h1>
+          <p class="empty-subtitle">Выберите способ авторизации: войдите через Microsoft или используйте локальный профиль.</p>
+        </div>
+        <div class="auth-cards">
+
+          <div class="auth-card auth-card-local">
+            <span class="auth-card-title">Локальный профиль</span>
+            <span class="auth-card-sub">По никнейму</span>
+            <div class="nick-field">
+              <input class="nick-input" type="text" placeholder="Введите никнейм"
+                     maxlength="24" id="empty-nick-input">
+              <button class="nick-random" id="empty-nick-random" title="Случайный ник">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M10.6667 1.83333C10.6667 1.3731 10.2936 1 9.83333 1H1.83333C1.3731 1 1 1.3731 1 1.83333V9.83333C1 10.2936 1.3731 10.6667 1.83333 10.6667H9.83333C10.2936 10.6667 10.6667 10.2936 10.6667 9.83333V1.83333ZM11.6667 9.83333C11.6667 10.8459 10.8459 11.6667 9.83333 11.6667H1.83333C0.820811 11.6667 0 10.8459 0 9.83333V1.83333C0 0.820811 0.820811 0 1.83333 0H9.83333C10.8459 0 11.6667 0.820811 11.6667 1.83333V9.83333Z" fill="currentColor"/>
+                  <path d="M5.16667 3.83333C5.16667 4.56971 4.56971 5.16667 3.83333 5.16667C3.09695 5.16667 2.5 4.56971 2.5 3.83333C2.5 3.09695 3.09695 2.5 3.83333 2.5C4.56971 2.5 5.16667 3.09695 5.16667 3.83333Z" fill="currentColor"/>
+                  <path d="M4.5 3.83333C4.5 3.46514 4.20152 3.16667 3.83333 3.16667C3.46514 3.16667 3.16667 3.46514 3.16667 3.83333C3.16667 4.20152 3.46514 4.5 3.83333 4.5V5.16667C3.09695 5.16667 2.5 4.56971 2.5 3.83333C2.5 3.09695 3.09695 2.5 3.83333 2.5C4.56971 2.5 5.16667 3.09695 5.16667 3.83333C5.16667 4.56971 4.56971 5.16667 3.83333 5.16667V4.5C4.20152 4.5 4.5 4.20152 4.5 3.83333Z" fill="currentColor"/>
+                  <path d="M5.16667 7.83333C5.16667 8.56971 4.56971 9.16667 3.83333 9.16667C3.09695 9.16667 2.5 8.56971 2.5 7.83333C2.5 7.09695 3.09695 6.5 3.83333 6.5C4.56971 6.5 5.16667 7.09695 5.16667 7.83333Z" fill="currentColor"/>
+                  <path d="M4.5 7.83333C4.5 7.46514 4.20152 7.16667 3.83333 7.16667C3.46514 7.16667 3.16667 7.46514 3.16667 7.83333C3.16667 8.20152 3.46514 8.5 3.83333 8.5V9.16667C3.09695 9.16667 2.5 8.56971 2.5 7.83333C2.5 7.09695 3.09695 6.5 3.83333 6.5C4.56971 6.5 5.16667 7.09695 5.16667 7.83333C5.16667 8.56971 4.56971 9.16667 3.83333 9.16667V8.5C4.20152 8.5 4.5 8.20152 4.5 7.83333Z" fill="currentColor"/>
+                  <path d="M9.16667 3.83333C9.16667 4.56971 8.56971 5.16667 7.83333 5.16667C7.09695 5.16667 6.5 4.56971 6.5 3.83333C6.5 3.09695 7.09695 2.5 7.83333 2.5C8.56971 2.5 9.16667 3.09695 9.16667 3.83333Z" fill="currentColor"/>
+                  <path d="M8.5 3.83333C8.5 3.46514 8.20152 3.16667 7.83333 3.16667C7.46514 3.16667 7.16667 3.46514 7.16667 3.83333C7.16667 4.20152 7.46514 4.5 7.83333 4.5V5.16667C7.09695 5.16667 6.5 4.56971 6.5 3.83333C6.5 3.09695 7.09695 2.5 7.83333 2.5C8.56971 2.5 9.16667 3.09695 9.16667 3.83333C9.16667 4.56971 8.56971 5.16667 7.83333 5.16667V4.5C8.20152 4.5 8.5 4.20152 8.5 3.83333Z" fill="currentColor"/>
+                  <path d="M9.16667 7.83333C9.16667 8.56971 8.56971 9.16667 7.83333 9.16667C7.09695 9.16667 6.5 8.56971 6.5 7.83333C6.5 7.09695 7.09695 6.5 7.83333 6.5C8.56971 6.5 9.16667 7.09695 9.16667 7.83333Z" fill="currentColor"/>
+                  <path d="M8.5 7.83333C8.5 7.46514 8.20152 7.16667 7.83333 7.16667C7.46514 7.16667 7.16667 7.46514 7.16667 7.83333C7.16667 8.20152 7.46514 8.5 7.83333 8.5V9.16667C7.09695 9.16667 6.5 8.56971 6.5 7.83333C6.5 7.09695 7.09695 6.5 7.83333 6.5C8.56971 6.5 9.16667 7.09695 9.16667 7.83333C9.16667 8.56971 8.56971 9.16667 7.83333 9.16667V8.5C8.20152 8.5 8.5 8.20152 8.5 7.83333Z" fill="currentColor"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Manager state ── -->
+      <div class="view view-manager" id="view-manager">
+        <h1 class="manager-title">Менеджер аккаунтов</h1>
+
+        <div class="search-row">
+          <div class="search-field">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M7 2a5 5 0 1 0 3.162 8.87l2.485 2.484a.75.75 0 1 0 1.06-1.06l-2.484-2.486A5 5 0 0 0 7 2ZM3.5 7a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0Z" fill="currentColor"/>
+            </svg>
+            <input class="search-input" type="text" placeholder="Поиск аккаунтов..." id="search-input">
+          </div>
+          <button class="icon-btn" id="btn-add-account" title="Добавить аккаунт">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 4a1 1 0 0 1 1 1v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6V5a1 1 0 0 1 1-1Z" fill="currentColor"/>
+            </svg>
+          </button>
+          <div class="filter-wrap">
+            <button class="icon-btn" id="btn-filter" title="Фильтр">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 6a1 1 0 0 1 1-1h14a1 1 0 1 1 0 2H5a1 1 0 0 1-1-1Zm3 5a1 1 0 0 1 1-1h8a1 1 0 1 1 0 2H8a1 1 0 0 1-1-1Zm3 5a1 1 0 0 1 1-1h2a1 1 0 1 1 0 2h-2a1 1 0 0 1-1-1Z" fill="currentColor"/>
+              </svg>
+            </button>
+            <div class="filter-popup" id="filter-popup">
+              <div class="filter-item active" data-filter="all">Все</div>
+              <div class="filter-item" data-filter="local">Локальный</div>
+              <div class="filter-item" data-filter="microsoft">Microsoft</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="accounts-grid" id="accounts-grid"></div>
+      </div>
+
+      <!-- ── Preview panel (always visible, state changes) ── -->
+      <div class="preview-panel" id="preview-panel">
+        <!-- Populated by JS -->
+      </div>
+
+      <!-- ── New account modal ── -->
+      <div class="modal-overlay" id="modal-new-account">
+        <button class="modal-close" id="modal-close-btn">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3.22 3.22a.75.75 0 0 1 1.06 0L8 6.94l3.72-3.72a.75.75 0 1 1 1.06 1.06L9.06 8l3.72 3.72a.75.75 0 1 1-1.06 1.06L8 9.06l-3.72 3.72a.75.75 0 0 1-1.06-1.06L6.94 8 3.22 4.28a.75.75 0 0 1 0-1.06Z" fill="currentColor"/>
+          </svg>
+        </button>
+        <div class="modal-content">
+          <div class="empty-heading">
+            <h1 class="empty-title">Новый аккаунт</h1>
+            <p class="empty-subtitle">Выберите способ авторизации: войдите через Microsoft или используйте локальный профиль.</p>
+          </div>
+          <div class="auth-cards">
+
+            <div class="auth-card auth-card-local">
+              <span class="auth-card-title">Локальный профиль</span>
+              <span class="auth-card-sub">По никнейму</span>
+              <div class="nick-field">
+                <input class="nick-input" type="text" placeholder="Введите никнейм"
+                       maxlength="24" id="modal-nick-input">
+                <button class="nick-random" id="modal-nick-random" title="Случайный ник">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10.6667 1.83333C10.6667 1.3731 10.2936 1 9.83333 1H1.83333C1.3731 1 1 1.3731 1 1.83333V9.83333C1 10.2936 1.3731 10.6667 1.83333 10.6667H9.83333C10.2936 10.6667 10.6667 10.2936 10.6667 9.83333V1.83333ZM11.6667 9.83333C11.6667 10.8459 10.8459 11.6667 9.83333 11.6667H1.83333C0.820811 11.6667 0 10.8459 0 9.83333V1.83333C0 0.820811 0.820811 0 1.83333 0H9.83333C10.8459 0 11.6667 0.820811 11.6667 1.83333V9.83333Z" fill="currentColor"/>
+                    <path d="M5.16667 3.83333C5.16667 4.56971 4.56971 5.16667 3.83333 5.16667C3.09695 5.16667 2.5 4.56971 2.5 3.83333C2.5 3.09695 3.09695 2.5 3.83333 2.5C4.56971 2.5 5.16667 3.09695 5.16667 3.83333Z" fill="currentColor"/>
+                    <path d="M4.5 3.83333C4.5 3.46514 4.20152 3.16667 3.83333 3.16667C3.46514 3.16667 3.16667 3.46514 3.16667 3.83333C3.16667 4.20152 3.46514 4.5 3.83333 4.5V5.16667C3.09695 5.16667 2.5 4.56971 2.5 3.83333C2.5 3.09695 3.09695 2.5 3.83333 2.5C4.56971 2.5 5.16667 3.09695 5.16667 3.83333C5.16667 4.56971 4.56971 5.16667 3.83333 5.16667V4.5C4.20152 4.5 4.5 4.20152 4.5 3.83333Z" fill="currentColor"/>
+                    <path d="M5.16667 7.83333C5.16667 8.56971 4.56971 9.16667 3.83333 9.16667C3.09695 9.16667 2.5 8.56971 2.5 7.83333C2.5 7.09695 3.09695 6.5 3.83333 6.5C4.56971 6.5 5.16667 7.09695 5.16667 7.83333Z" fill="currentColor"/>
+                    <path d="M4.5 7.83333C4.5 7.46514 4.20152 7.16667 3.83333 7.16667C3.46514 7.16667 3.16667 7.46514 3.16667 7.83333C3.16667 8.20152 3.46514 8.5 3.83333 8.5V9.16667C3.09695 9.16667 2.5 8.56971 2.5 7.83333C2.5 7.09695 3.09695 6.5 3.83333 6.5C4.56971 6.5 5.16667 7.09695 5.16667 7.83333C5.16667 8.56971 4.56971 9.16667 3.83333 9.16667V8.5C4.20152 8.5 4.5 8.20152 4.5 7.83333Z" fill="currentColor"/>
+                    <path d="M9.16667 3.83333C9.16667 4.56971 8.56971 5.16667 7.83333 5.16667C7.09695 5.16667 6.5 4.56971 6.5 3.83333C6.5 3.09695 7.09695 2.5 7.83333 2.5C8.56971 2.5 9.16667 3.09695 9.16667 3.83333Z" fill="currentColor"/>
+                    <path d="M8.5 3.83333C8.5 3.46514 8.20152 3.16667 7.83333 3.16667C7.46514 3.16667 7.16667 3.46514 7.16667 3.83333C7.16667 4.20152 7.46514 4.5 7.83333 4.5V5.16667C7.09695 5.16667 6.5 4.56971 6.5 3.83333C6.5 3.09695 7.09695 2.5 7.83333 2.5C8.56971 2.5 9.16667 3.09695 9.16667 3.83333C9.16667 4.56971 8.56971 5.16667 7.83333 5.16667V4.5C8.20152 4.5 8.5 4.20152 8.5 3.83333Z" fill="currentColor"/>
+                    <path d="M9.16667 7.83333C9.16667 8.56971 8.56971 9.16667 7.83333 9.16667C7.09695 9.16667 6.5 8.56971 6.5 7.83333C6.5 7.09695 7.09695 6.5 7.83333 6.5C8.56971 6.5 9.16667 7.09695 9.16667 7.83333Z" fill="currentColor"/>
+                    <path d="M8.5 7.83333C8.5 7.46514 8.20152 7.16667 7.83333 7.16667C7.46514 7.16667 7.16667 7.46514 7.16667 7.83333C7.16667 8.20152 7.46514 8.5 7.83333 8.5V9.16667C7.09695 9.16667 6.5 8.56971 6.5 7.83333C6.5 7.09695 7.09695 6.5 7.83333 6.5C8.56971 6.5 9.16667 7.09695 9.16667 7.83333C9.16667 8.56971 8.56971 9.16667 7.83333 9.16667V8.5C8.20152 8.5 8.5 8.20152 8.5 7.83333Z" fill="currentColor"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Popups -->
+    <div class="popup popup-client" id="popup-client">
+      <div class="popup-item popup-item-product" data-disabled="1"><div class="popup-item-icon product-icon"><img src="../assets/icons/smertvisuals.svg" alt=""></div><span class="popup-item-label">SmertVisuals</span></div>
+      <div class="popup-divider"></div>
+      <div class="popup-item" data-action="check-update"><div class="popup-item-icon"><img src="../assets/icons/update.svg" alt=""></div><span class="popup-item-label">Проверка обновлений</span></div>
+      <div class="popup-divider"></div>
+      <div class="popup-item" data-action="open-folder"><div class="popup-item-icon"><img src="../assets/icons/folder.svg" alt=""></div><span class="popup-item-label">Открыть папку</span></div>
+      <div class="popup-item" data-action="open-mods"><div class="popup-item-icon"><img src="../assets/icons/folder.svg" alt=""></div><span class="popup-item-label">Папка с модами</span></div>
+      <div class="popup-divider"></div>
+      <div class="popup-item" data-url="https://help.energyutils.me/"><div class="popup-item-icon"><img src="../assets/icons/link.svg" alt=""></div><span class="popup-item-label">Поддержка</span></div>
+      <div class="popup-item" data-url="https://discord.gg/A6RdtUr2pk"><div class="popup-item-icon"><img src="../assets/icons/link.svg" alt=""></div><span class="popup-item-label">Discord</span></div>
+      <div class="popup-item" data-url="https://t.me/energyutils"><div class="popup-item-icon"><img src="../assets/icons/link.svg" alt=""></div><span class="popup-item-label">Telegram</span></div>
+      <div class="popup-item" data-url="https://energyutils.me"><div class="popup-item-icon"><img src="../assets/icons/link.svg" alt=""></div><span class="popup-item-label">Сайт</span></div>
+      <div class="popup-item" data-url="https://energyutils.me/faq"><div class="popup-item-icon"><img src="../assets/icons/link.svg" alt=""></div><span class="popup-item-label">FAQ</span></div>
+      <div class="popup-divider"></div>
+      <div class="popup-item" data-nav="settings.html"><div class="popup-item-icon"><img src="../assets/icons/settings.svg" alt=""></div><span class="popup-item-label">Настройки</span></div>
+    </div>
+    <div class="popup popup-account" id="popup-account">
+      <div class="popup-item"><div class="popup-item-icon"><img src="../assets/icons/quit.svg" alt=""></div><span class="popup-item-label">Выйти</span></div>
+    </div>
+
+  </div>
+
+  <script>
+    // ── Page transitions ────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', () => {
+      requestAnimationFrame(() => {
+        document.body.classList.add('ready');
+        window.nativeReady?.().catch(() => {});
+      });
+      render();
+      hydratePillUsername();
+    });
+
+    function applyUserToPill(u) {
+      if (!u) return;
+      const nameEl   = document.querySelector('#account-pill .pill-username');
+      const avatarEl = document.querySelector('#account-pill .avatar-sm');
+      if (nameEl && u.username) nameEl.textContent = u.username;
+      const avatarSrc = u.avatarDataUrl || u.avatarUrl;
+      if (avatarEl && avatarSrc) avatarEl.src = avatarSrc;
+    }
+
+    try {
+      const cached = JSON.parse(localStorage.getItem('rv_user') || 'null');
+      if (cached) applyUserToPill(cached);
+    } catch (_) {}
+
+    async function hydratePillUsername() {
+      try {
+        const s = await window.nativeAuthState?.();
+        const u = s?.user;
+        if (!u) return;
+        try { localStorage.setItem('rv_user', JSON.stringify(u)); } catch (_) {}
+        applyUserToPill(u);
+      } catch (_) {}
+    }
+
+    function navigateTo(url) {
+      window.location.href = url;
+    }
+
+    // ── Window controls ──
+    document.getElementById('btn-hide').addEventListener('click', () => window.nativeHide?.().catch(() => {}));
+    document.getElementById('btn-close').addEventListener('click', () => window.nativeClose?.().catch(() => {}));
+
+    // ── Drag (top 44px strip) ──
+    // .titlebar visually sits at y=20..44 (after .app's 20px top padding) so a
+    // click in the topmost 20 pixels would otherwise miss the drag handler.
+    // Listen on body and gate by clientY < 44 so the entire top edge grabs.
+    const NODRAG = '#btn-hide,#btn-close,.account-pill,.logo-down,.popup';
+    document.body.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      if (e.clientY > 44) return;
+      if (e.target.closest(NODRAG)) return;
+      window.nativeDragMove?.().catch(() => {});
+    });
+
+    // ── Block right-click context menu ──
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // ── Account pill ──
+    const accountPill = document.getElementById('account-pill');
+    const pillDown    = accountPill.querySelector('.pill-down');
+
+    // ── Popups ──
+    const popupClient  = document.getElementById('popup-client');
+    const popupAccount = document.getElementById('popup-account');
+    const popupQuit    = document.getElementById('popup-quit');
+    const logoDown     = document.querySelector('.logo-down');
+    const btnQuit      = document.getElementById('btn-quit');
+
+    function closeAllPopups() {
+      popupClient.classList.remove('visible');
+      popupAccount.classList.remove('visible');
+      popupQuit.classList.remove('visible');
+    }
+    logoDown.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const wasOpen = popupClient.classList.contains('visible');
+      closeAllPopups();
+      if (!wasOpen) popupClient.classList.add('visible');
+    });
+    popupClient.addEventListener('click', (e) => {
+      const item = e.target.closest('.popup-item');
+      if (!item) return;
+      e.stopPropagation();
+      closeAllPopups();
+      if (item.dataset.url) {
+        window.nativeOpenUrl?.(item.dataset.url).catch(() => {});
+      } else if (item.dataset.nav) {
+        navigateTo(item.dataset.nav);
+      } else if (item.dataset.action === 'open-folder') {
+        window.nativeOpenFolder?.('').catch(() => {});
+      } else if (item.dataset.action === 'open-mods') {
+        window.nativeOpenUserMods?.().catch(() => {});
+      } else if (item.dataset.action === 'check-update') {
+        navigateTo('dashboard.html');
+      }
+    });
+    pillDown.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const wasOpen = popupAccount.classList.contains('visible');
+      closeAllPopups();
+      if (!wasOpen) popupAccount.classList.add('visible');
+    });
+    btnQuit.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const wasOpen = popupQuit.classList.contains('visible');
+      closeAllPopups();
+      if (!wasOpen) popupQuit.classList.add('visible');
+    });
+    document.getElementById('quit-confirm').addEventListener('click', () => {
+      popupQuit.classList.remove('visible');
+      window.nativeClose?.().catch(() => {});
+    });
+    document.getElementById('quit-cancel').addEventListener('click', () => popupQuit.classList.remove('visible'));
+
+    document.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.popup')) return;
+      if (e.target.closest('.logo-down') ||
+          e.target.closest('.pill-down') ||
+          e.target.closest('#btn-quit')) return;
+      closeAllPopups();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      closeAllPopups();
+      closeModal();
+    });
+
+    // ── Account store (native, persisted to disk via C++) ──────────────
+    // Cache the list and selected id so the synchronous render code stays
+    // simple — refresh() re-pulls from C++ before re-rendering.
+    let accountsCache = [];
+    let selectedIdCache = '';
+
+    async function refreshAccounts() {
+      try {
+        accountsCache   = (await window.nativeGetAccounts?.())        || [];
+        selectedIdCache = (await window.nativeGetSelectedAccount?.()) || '';
+      } catch (_) {}
+    }
+
+    function loadAccounts() { return accountsCache.slice(); }
+    function getSelected()  { return selectedIdCache; }
+
+    async function setSelected(id) {
+      selectedIdCache = id || '';
+      try { await window.nativeSetSelectedAccount?.(id || ''); } catch (_) {}
+    }
+
+    function randomNick() {
+      const adj = ['Shadow','Swift','Mighty','Pixel','Night','Fire','Ice','Rogue','Cosmic','Quiet','Primal','Nimble','Wild','Brave','Silent','Neon','Frosty','Lunar'];
+      const noun = ['Fox','Raven','Wolf','Dragon','Knight','Hunter','Mage','Pilot','Voyager','Phantom','Blade','Storm','Rider','Sage','Lynx','Tiger','Hawk'];
+      const a = adj[Math.floor(Math.random() * adj.length)];
+      const n = noun[Math.floor(Math.random() * noun.length)];
+      return a + n + Math.floor(Math.random() * 100);
+    }
+
+    async function addAccount(name, type) {
+      const name_ = (name || '').trim();
+      if (!name_) return null;
+      let added = null;
+      try { added = await window.nativeAddAccount?.(name_, type || 'local'); }
+      catch (_) {}
+      if (added) await refreshAccounts();
+      return added;
+    }
+
+    async function removeAccount(id) {
+      try { await window.nativeRemoveAccount?.(id); } catch (_) {}
+      await refreshAccounts();
+    }
+
+    // ── Rendering ──────────────────────────────────────────────────────
+    const viewEmpty   = document.getElementById('view-empty');
+    const viewManager = document.getElementById('view-manager');
+    const previewPanel = document.getElementById('preview-panel');
+    const accountsGrid = document.getElementById('accounts-grid');
+    const searchInput  = document.getElementById('search-input');
+
+    let searchQuery = '';
+    let filterType  = 'all'; // 'all' | 'local' | 'microsoft'
+
+    async function render() {
+      await refreshAccounts();
+      const list = loadAccounts();
+      if (list.length === 0) {
+        viewEmpty.classList.add('active');
+        viewManager.classList.remove('active');
+        previewPanel.classList.add('disabled');
+        previewPanel.innerHTML = emptyPreviewHTML();
+      } else {
+        viewManager.classList.add('active');
+        viewEmpty.classList.remove('active');
+        previewPanel.classList.remove('disabled');
+        renderGrid(list);
+        renderPreview();
+      }
+    }
+
+    function emptyPreviewHTML() {
+      return `
+        <div class="preview-empty">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4 0-8 2-8 5v1h16v-1c0-3-4-5-8-5Z" fill="currentColor"/>
+          </svg>
+          <span>Аккаунт не выбран</span>
+        </div>`;
+    }
+
+    function msLogoHTML() {
+      return `<svg class="ms-logo" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M7.60412 5.60413C7.60412 6.70869 6.70869 7.60412 5.60412 7.60412H2C0.89543 7.60412 0 6.70869 0 5.60412V2C0 0.89543 0.895431 0 2 0H5.60413C6.70869 0 7.60412 0.895431 7.60412 2V5.60413Z" fill="#F1511B"/>
+        <path d="M16.0001 5.60413C16.0001 6.70869 15.1046 7.60412 14.0001 7.60412H10.396C9.29143 7.60412 8.396 6.70869 8.396 5.60412V2C8.396 0.89543 9.29143 0 10.396 0H14.0001C15.1046 0 16.0001 0.895431 16.0001 2V5.60413Z" fill="#80CC28"/>
+        <path d="M7.60394 14.0001C7.60394 15.1047 6.70851 16.0001 5.60394 16.0001H2C0.895429 16.0001 0 15.1047 0 14.0001V10.396C0 9.29143 0.895431 8.396 2 8.396H5.60394C6.70851 8.396 7.60394 9.29143 7.60394 10.396V14.0001Z" fill="#00ADEF"/>
+        <path d="M16.0001 14.0001C16.0001 15.1047 15.1046 16.0001 14.0001 16.0001H10.396C9.29143 16.0001 8.396 15.1047 8.396 14.0001V10.396C8.396 9.29143 9.29143 8.396 10.396 8.396H14.0001C15.1046 8.396 16.0001 9.29143 16.0001 10.396V14.0001Z" fill="#FBBC09"/>
+      </svg>`;
+    }
+    function playerIconHTML() {
+      return `<svg width="11" height="12" viewBox="0 0 11 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M9.33333 11.3034V10.7037C9.33333 8.99018 7.98063 7.61029 6.33333 7.61029H4C2.3527 7.61029 1 8.99018 1 10.7037V11.3034C1 11.5829 0.776142 11.8095 0.5 11.8095C0.223858 11.8095 0 11.5829 0 11.3034V10.7037C0 8.44622 1.78563 6.59804 4 6.59804H6.33333C8.5477 6.59804 10.3333 8.44622 10.3333 10.7037V11.3034C10.3333 11.5829 10.1095 11.8095 9.83333 11.8095C9.55719 11.8095 9.33333 11.5829 9.33333 11.3034ZM7 2.90559C7 1.8519 6.1723 1.01224 5.16667 1.01224C4.16104 1.01225 3.33333 1.85191 3.33333 2.90559C3.33337 3.95924 4.16106 4.79894 5.16667 4.79894C6.17227 4.79894 6.99996 3.95924 7 2.90559ZM8 2.90559C7.99996 4.5032 6.73935 5.81118 5.16667 5.81118C3.59399 5.81118 2.33337 4.5032 2.33333 2.90559C2.33333 1.30795 3.59396 7.04964e-07 5.16667 0C6.73937 0 8 1.30795 8 2.90559Z" fill="currentColor"/>
+      </svg>`;
+    }
+
+    function accountInitial(name) {
+      return (name[0] || '?').toUpperCase();
+    }
+    // mc-heads.net serves the player's face by name and falls back to Steve
+    // for any name that isn't a real Mojang account — exactly what we want
+    // for the offline accounts the launcher manages.
+    function skinFaceUrl(name) {
+      return `https://mc-heads.net/avatar/${encodeURIComponent(name)}/64`;
+    }
+    function hashColor(name) {
+      let h = 0;
+      for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffff;
+      return `hsl(${h % 360}, 45%, 28%)`;
+    }
+
+    function renderGrid(list) {
+      const query = searchQuery.toLowerCase();
+      const selectedId = getSelected();
+      const filtered = list.filter(a =>
+        a.name.toLowerCase().includes(query) &&
+        (filterType === 'all' || a.type === filterType)
+      );
+
+      accountsGrid.innerHTML = '';
+      for (const acc of filtered) {
+        const card = document.createElement('div');
+        card.className = 'acc-card' + (acc.id === selectedId ? ' selected' : '');
+        card.dataset.id = acc.id;
+
+        const typeLabel = acc.type === 'microsoft' ? 'Microsoft' : 'Локальный';
+        const typeIcon = acc.type === 'microsoft' ? msLogoHTML() : `<span style="color:#656571;display:flex;">${playerIconHTML()}</span>`;
+
+        card.innerHTML = `
+          <div class="acc-top">
+            <div class="acc-skin" style="background:${hashColor(acc.name)};">
+              <img src="../assets/images/steve.png" alt="${escapeHtml(acc.name)}"
+                   data-real-src="${skinFaceUrl(acc.name)}" data-fallback="${accountInitial(acc.name)}"
+                   onerror="this.replaceWith(document.createTextNode(this.dataset.fallback))">
+            </div>
+            <div class="acc-type-badge">${typeIcon}<span>${typeLabel}</span></div>
+          </div>
+          <div class="acc-bot">
+            <div class="acc-info">
+              <span class="acc-name">${escapeHtml(acc.name)}</span>
+              <span class="acc-date">Добавлен ${acc.addedAt}</span>
+            </div>
+            ${acc.id === selectedId ? '<div class="acc-selected-pill">Выбран</div>' : ''}
+          </div>
+        `;
+        card.addEventListener('click', async () => {
+          await setSelected(acc.id);
+          await render();
+        });
+        accountsGrid.appendChild(card);
+      }
+
+      // Swap Steve placeholder for the real player face once it's in cache.
+      // Each <img> has its real URL stashed in data-real-src.
+      accountsGrid.querySelectorAll('.acc-skin img[data-real-src]').forEach(img => {
+        const realUrl = img.dataset.realSrc;
+        if (!realUrl) return;
+        const probe = new Image();
+        probe.onload = () => { img.src = realUrl; };
+        probe.src = realUrl;
+      });
+
+      // "Add account" card as last grid item
+      const addCard = document.createElement('div');
+      addCard.className = 'acc-card-add';
+      addCard.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 4a1 1 0 0 1 1 1v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6V5a1 1 0 0 1 1-1Z" fill="currentColor"/>
+        </svg>
+        <span class="acc-card-add-text">Добавить аккаунт</span>
+      `;
+      addCard.addEventListener('click', openModal);
+      accountsGrid.appendChild(addCard);
+    }
+
+    function renderPreview() {
+      const list = loadAccounts();
+      const selectedId = getSelected();
+      const acc = list.find(a => a.id === selectedId) || list[0];
+      if (!acc) { previewPanel.innerHTML = emptyPreviewHTML(); return; }
+
+      const typeLabel = acc.type === 'microsoft' ? 'Microsoft' : 'Локальный';
+      const typeIcon = acc.type === 'microsoft' ? msLogoHTML() : `<span style="color:#656571;display:flex;">${playerIconHTML()}</span>`;
+
+      previewPanel.innerHTML = `
+        <div class="preview-body">
+          <div class="preview-badge-nick">
+            ${playerIconHTML()}
+            <span>${escapeHtml(acc.name)}</span>
+          </div>
+        </div>
+        <div class="preview-type">${typeIcon}<span>${typeLabel}</span></div>
+        <div class="preview-nick-row">
+          <div class="preview-nick-main">
+            <span class="preview-nick-name">${escapeHtml(acc.name)}</span>
+            <button class="preview-copy" id="preview-copy-btn" title="Скопировать">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M16.1538 6.65688C16.1538 6.43105 16.11 6.2069 16.0237 5.99825C15.9372 5.78952 15.8101 5.59929 15.6503 5.43953C15.4906 5.27987 15.3002 5.15391 15.0916 5.06749C14.8831 4.98118 14.6599 4.93608 14.4343 4.93602H6.65687C6.20059 4.93602 5.76216 5.11689 5.43952 5.43953C5.11687 5.76217 4.93601 6.2006 4.93601 6.65688V14.4343C4.93607 14.6599 4.98117 14.8831 5.06748 15.0916C5.1539 15.3002 5.27986 15.4906 5.43952 15.6503C5.59928 15.8101 5.78951 15.9372 5.99824 16.0237C6.20689 16.11 6.43104 16.1538 6.65687 16.1538H14.4343C14.6598 16.1538 14.8832 16.1099 15.0916 16.0237C15.3003 15.9372 15.4905 15.8101 15.6503 15.6503C15.8101 15.4905 15.9372 15.3003 16.0237 15.0916C16.1099 14.8832 16.1538 14.6598 16.1538 14.4343V6.65688ZM17.5 14.4343C17.4999 14.8367 17.4212 15.2351 17.2673 15.6069C17.1132 15.979 16.8869 16.3173 16.6021 16.6021C16.3173 16.8869 15.979 17.1132 15.6069 17.2673C15.2351 17.4212 14.8367 17.4999 14.4343 17.5H6.65687C6.2542 17.5 5.85493 17.4214 5.4829 17.2673C5.11084 17.1132 4.77248 16.8869 4.48772 16.6021C4.20306 16.3174 3.9779 15.9789 3.82383 15.6069C3.66982 15.2351 3.58988 14.8368 3.58982 14.4343V6.65688C3.58982 5.84356 3.91262 5.06283 4.48772 4.48773C5.06282 3.91263 5.84355 3.58983 6.65687 3.58983H14.4343C14.8368 3.58989 15.2351 3.66983 15.6069 3.82384C15.9789 3.97791 16.3174 4.20307 16.6021 4.48773C16.8869 4.77249 17.1132 5.11085 17.2673 5.48291C17.4214 5.85494 17.5 6.25421 17.5 6.65688V14.4343Z" fill="currentColor"/>
+                <path d="M0 11.4426V2.46757C0.000238397 1.10897 1.10898 0.000238222 2.46757 0H11.4426C11.9053 2.26485e-07 12.3069 0.12303 12.6481 0.370727C12.9747 0.607813 13.2004 0.927173 13.3764 1.24365C13.5571 1.56845 13.4408 1.9779 13.1161 2.15863C12.7915 2.33916 12.382 2.22264 12.2011 1.89833C12.0703 1.66303 11.9594 1.53289 11.858 1.45925C11.7712 1.3962 11.653 1.34619 11.4426 1.34619H2.46757C1.85245 1.34643 1.34643 1.85245 1.34619 2.46757V11.4426L1.35671 11.5898C1.37628 11.7359 1.42407 11.8771 1.49869 12.0053C1.59839 12.1764 1.74191 12.3189 1.91411 12.4167C2.237 12.6005 2.35008 13.0113 2.16652 13.3344C1.98282 13.6573 1.57201 13.7703 1.24891 13.5868C0.870106 13.3715 0.554574 13.06 0.335233 12.6836C0.143207 12.354 0.0306188 11.9848 0.00525855 11.6056L0 11.4426Z" fill="currentColor"/>
+              </svg>
+            </button>
+          </div>
+          <span class="preview-date">Добавлен ${acc.addedAt}</span>
+        </div>
+        <button class="preview-select-btn ${acc.id === selectedId ? 'current' : ''}">
+          ${acc.id === selectedId ? 'Выбрано' : 'Выбрать'}
+        </button>
+        <div class="preview-actions">
+          <button class="preview-action preview-action-icon-only" title="Обновить">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M0.000416314 10.6335V7.43359C0.000416314 7.18809 0.17862 6.97843 0.420989 6.93945C0.663482 6.90058 0.898904 7.04406 0.975677 7.27734C1.61835 9.22962 3.54035 10.6667 5.83375 10.6667C8.12715 10.6667 10.0491 9.22962 10.6918 7.27734C10.7781 7.01506 11.061 6.87205 11.3233 6.95833C11.5856 7.04466 11.7287 7.32754 11.6423 7.58984C10.8607 9.96479 8.54597 11.6667 5.83375 11.6667C3.87062 11.6667 2.11633 10.7746 1.00042 9.38151V10.6335C1.00035 10.9095 0.776515 11.1335 0.500416 11.1335C0.224317 11.1335 0.00048674 10.9095 0.000416314 10.6335ZM5.83375 0C7.7967 0 9.55115 0.891594 10.6671 2.28451V1.0332C10.6672 0.757121 10.891 0.533203 11.1671 0.533203C11.4432 0.533203 11.667 0.757121 11.6671 1.0332V4.23307C11.6671 4.47858 11.4889 4.68824 11.2465 4.72721C11.004 4.76609 10.7686 4.6226 10.6918 4.38932C10.0491 2.43705 8.12715 1 5.83375 1C3.54035 1 1.61835 2.43705 0.975677 4.38932C0.88936 4.6516 0.606451 4.79461 0.344166 4.70833C0.0818633 4.62201 -0.0611674 4.33913 0.0251559 4.07682C0.806793 1.70187 3.12153 0 5.83375 0Z" fill="currentColor"/>
+            </svg>
+          </button>
+          <button class="preview-action delete" id="preview-delete-btn" title="Удалить аккаунт">
+            <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M10.5509 1.33333C10.5509 1.29736 10.537 1.22703 10.3893 1.13997C10.2392 1.05156 10.0278 1.00004 9.84703 1H4.29467C4.13326 1.00005 3.98331 1.06008 3.87609 1.15951L0.99301 3.83333L3.87609 6.50716C3.98331 6.60659 4.13326 6.66662 4.29467 6.66667H9.84703C10.0278 6.66663 10.2392 6.61511 10.3893 6.52669C10.537 6.43963 10.5509 6.36931 10.5509 6.33333V1.33333ZM8.37812 2.44336C8.57703 2.25418 8.89031 2.26383 9.07748 2.46484C9.26462 2.66595 9.25512 2.98265 9.05623 3.17187L8.36074 3.83333L9.05623 4.49479C9.25512 4.68401 9.26462 5.00071 9.07748 5.20182C8.89031 5.40284 8.57703 5.41249 8.37812 5.22331L7.63884 4.51953L6.89955 5.22331C6.70065 5.41249 6.38737 5.40284 6.2002 5.20182C6.01306 5.00071 6.02256 4.68401 6.22145 4.49479L6.9163 3.83333L6.22145 3.17187C6.02256 2.98265 6.01306 2.66595 6.2002 2.46484C6.38737 2.26382 6.70065 2.25418 6.89955 2.44336L7.63884 3.14648L8.37812 2.44336ZM11.54 6.33333C11.54 6.85326 11.2106 7.19999 10.8871 7.39062C10.566 7.57971 10.1783 7.66663 9.84703 7.66667H4.29467C3.89371 7.66662 3.50311 7.51809 3.20764 7.24414L0.323276 4.56901C0.223276 4.47628 0.141793 4.36362 0.0856488 4.23698C0.0294823 4.11026 0 3.97294 0 3.83333C0 3.69373 0.0294823 3.5564 0.0856488 3.42969L0.132659 3.33724C0.183873 3.2479 0.248337 3.16715 0.323276 3.09766L3.20764 0.422526C3.50311 0.148579 3.89371 4.80554e-05 4.29467 0H9.84703C10.1783 3.33314e-05 10.566 0.0869518 10.8871 0.276042C11.2106 0.466675 11.54 0.81341 11.54 1.33333V6.33333Z" fill="currentColor"/>
+            </svg>
+            <span class="preview-action-label">Удалить аккаунт</span>
+          </button>
+        </div>
+      `;
+
+      document.getElementById('preview-copy-btn').addEventListener('click', async () => {
+        let ok = false;
+        try { ok = (await window.nativeCopyToClipboard?.(acc.name)) === true; } catch (_) {}
+        if (!ok) {
+          try { await navigator.clipboard?.writeText(acc.name); } catch (_) {}
+        }
+      });
+      document.getElementById('preview-delete-btn').addEventListener('click', async () => {
+        await removeAccount(acc.id);
+        await render();
+      });
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[c]));
+    }
+
+    // ── Empty state handlers ──
+    async function tryAddLocal(input) {
+      const name = input.value.trim();
+      if (!name) return;
+      const added = await addAccount(name, 'local');
+      if (!added) { input.value = ''; return; }
+      input.value = '';
+      closeModal();
+      await render();
+    }
+
+    const emptyNickInput = document.getElementById('empty-nick-input');
+    emptyNickInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') tryAddLocal(emptyNickInput);
+    });
+    document.getElementById('empty-nick-random').addEventListener('click', () => {
+      emptyNickInput.value = randomNick();
+      emptyNickInput.focus();
+    });
+
+    // ── Modal handlers ──
+    const modal = document.getElementById('modal-new-account');
+    function openModal() {
+      modal.classList.add('visible');
+      document.getElementById('modal-nick-input').focus();
+    }
+    function closeModal() {
+      modal.classList.remove('visible');
+      document.getElementById('modal-nick-input').value = '';
+    }
+    document.getElementById('modal-close-btn').addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal();
+    });
+
+    const modalNickInput = document.getElementById('modal-nick-input');
+    modalNickInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') tryAddLocal(modalNickInput);
+    });
+    document.getElementById('modal-nick-random').addEventListener('click', () => {
+      modalNickInput.value = randomNick();
+      modalNickInput.focus();
+    });
+
+    // ── Search ──
+    searchInput.addEventListener('input', (e) => {
+      searchQuery = e.target.value;
+      renderGrid(loadAccounts());
+    });
+
+    // ── Add account button (search row) — opens the same modal as the grid + tile.
+    document.getElementById('btn-add-account').addEventListener('click', openModal);
+
+    // ── Filter dropdown ──
+    const filterPopup = document.getElementById('filter-popup');
+    document.getElementById('btn-filter').addEventListener('click', (e) => {
+      e.stopPropagation();
+      filterPopup.classList.toggle('visible');
+    });
+    document.querySelectorAll('#filter-popup .filter-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        filterType = item.dataset.filter;
+        document.querySelectorAll('#filter-popup .filter-item').forEach(i =>
+          i.classList.toggle('active', i === item));
+        filterPopup.classList.remove('visible');
+        renderGrid(loadAccounts());
+      });
+    });
+    document.addEventListener('mousedown', (e) => {
+      if (!e.target.closest('.filter-wrap')) filterPopup.classList.remove('visible');
+    });
+  </script>
+</body>
+</html>
