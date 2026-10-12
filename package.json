@@ -1,9 +1,9 @@
-{
+﻿{
   "name": "energyutils-loader",
-  "version": "2.1.2",
-  "description": "EnergyUtils Launcher — by HB",
+  "version": "2.1.3",
+  "description": "EnergyUtils Launcher вЂ” by HB",
   "author": "HB <hb@energystudio>",
-  "copyright": "Copyright © 2026 EnergyStudio",
+  "copyright": "Copyright В© 2026 EnergyStudio",
   "private": true,
   "main": "electron/main.js",
   "type": "module",
