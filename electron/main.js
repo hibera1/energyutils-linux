@@ -75,9 +75,8 @@ const SEED_JAR = join(app.getPath("home"), "Downloads", "EnergyUtils.jar");
 const MOD_FILE_NAME = "EnergyUtils.jar";
 const MOD_JAR = join(MODS_DIR, MOD_FILE_NAME);
 // Мод на диске хранится ВСЕГДА зашифрованным (.enc). Чистый jar появляется
-// только на время запуска игры во временной скрытой папке и удаляется после.
-const MOD_JAR_RUNTIME_DIR = join(app.getPath("temp"), "eu-launch-" + process.pid);
-const MOD_JAR_RUNTIME = join(MOD_JAR_RUNTIME_DIR, MOD_FILE_NAME);
+// только на время запуска игры прямо в mods (KnotClient игнорирует --modsDir,
+// моды грузятся исключительно из gameDir/mods) и удаляется после выхода.
 const MOD_JAR_ENC = join(MODS_DIR, "EnergyUtils.jar.enc");
 const MOD_MANIFEST = join(MODS_DIR, "manifest.json");
 
@@ -231,10 +230,10 @@ const NATIVE_MOD_JAR = join(NATIVE_MODS_DIR, MOD_FILE_NAME);
 
 function mirrorNativeJar() {
   try {
-    // Зеркалим расшифрованный jar (если существует) из временной папки запуска.
-    if (!existsSync(MOD_JAR_RUNTIME)) return;
+    // Зеркалим расшифрованный jar (если существует) на время запуска.
+    if (!existsSync(MOD_JAR)) return;
     mkdirSync(NATIVE_MODS_DIR, { recursive: true });
-    copyFileSync(MOD_JAR_RUNTIME, NATIVE_MOD_JAR);
+    copyFileSync(MOD_JAR, NATIVE_MOD_JAR);
     hideJarFile(NATIVE_MOD_JAR);
   } catch {}
 }
@@ -247,8 +246,9 @@ function hideJarFile(p) {
   } catch {}
 }
 
-// Старые/лишние копии мода убираем навсегда: в mods ХРАНИМ ТОЛЬКО .enc и
-// fabric-api.jar; чистый EnergyUtils.jar удаляем (он живёт лишь во временной папке).
+// Старые/лишние копии мода убираем: в mods ХРАНЯТСЯ .enc (постоянно),
+// чистый EnergyUtils.jar (только на время игры) и fabric-api.jar.
+// Удаляем ЛИШНИЕ jar-дубли энергомода (renderopt и пр.) и .disabled/.tmp.
 function removeLegacyMods() {
   try {
     if (!existsSync(MODS_DIR)) return;
@@ -256,8 +256,10 @@ function removeLegacyMods() {
       const p = join(MODS_DIR, f);
       const lf = f.toLowerCase();
       if (lf === "fabric-api.jar") continue;
+      if (lf === "energyutils.jar") continue;       // временный чистый jar — не трогаем
       if (lf.endsWith(".enc") || lf === "energyutils.jar.enc") continue;
-      if (lf.endsWith(".jar")) {
+      if (lf === "renderopt.jar" || lf.startsWith("renderopt") || lf.startsWith("energyutils") ||
+          lf.includes(".disabled") || lf.endsWith(".jar.old") || lf.endsWith(".tmp")) {
         hideFile(p, false);
         rmSync(p, { force: true });
       }
@@ -769,8 +771,8 @@ async function doLaunch(quickServer) {
     const up = await installMod();
     if (!up.ok) return { ok: false, error: "Не удалось установить мод: " + (up.error || "нет соединения") };
   }
-  // Расшифровываем мод на время игры (чистый jar — во временной папке, НЕ в mods).
-  if (existsSync(MOD_JAR_ENC) && !existsSync(MOD_JAR_RUNTIME)) {
+  // Расшифровываем мод на время игры (чистый jar — прямо в mods, как читает Fabric).
+  if (existsSync(MOD_JAR_ENC) && !existsSync(MOD_JAR)) {
     const ok = await prepareModForLaunch();
     if (!ok) return { ok: false, error: "Не удалось расшифровать мод (файл повреждён). Переустанови мод кнопкой «Скачать мод»." };
   }
@@ -799,7 +801,6 @@ async function doLaunch(quickServer) {
     "-DFabricMcEmu=net.minecraft.client.main.Main",
     "net.fabricmc.loader.impl.launch.knot.KnotClient",
     "--gameDir", GAME_DIR,
-    "--modsDir", MOD_JAR_RUNTIME_DIR,
     "--username", await currentNick(),
     "--uuid", "00000000-0000-0000-0000-000000000000",
     "--accessToken", "0",
@@ -904,34 +905,24 @@ async function writeModManifest(data) {
 }
 
 // МОД ШИФРУЕТСЯ В ПОКОЕ: в mods лежит ТОЛЬКО .enc. Чистый jar создаётся
-// на время запуска во временной скрытой папке (НЕ в mods) и удаляется после.
+// на время запуска прямо в mods (KnotClient игнорирует --modsDir и грузит моды
+// только из gameDir/mods) и удаляется сразу после выхода из игры.
+// ВАЖНО: НЕ прятать файл (вообще) — Fabric пропускает скрытые/невидимые jar.
 async function prepareModForLaunch() {
   try {
     if (!existsSync(MOD_JAR_ENC)) return false;
-    if (!existsSync(MOD_JAR_RUNTIME)) {
-      mkdirSync(MOD_JAR_RUNTIME_DIR, { recursive: true });
+    if (!existsSync(MOD_JAR)) {
       const enc = await fs.readFile(MOD_JAR_ENC);
       const merged = decodeModAny(enc);
       if (!merged) return false;
-      const tmp = MOD_JAR_RUNTIME + ".tmp";
+      const tmp = MOD_JAR + ".tmp";
       await fs.writeFile(tmp, merged);
-      await fs.rename(tmp, MOD_JAR_RUNTIME);
+      await fs.rename(tmp, MOD_JAR);
     }
-    // fabric-api тоже копируем во временную папку (моды грузятся только оттуда).
-    try {
-      const apiSrc = join(MODS_DIR, "fabric-api.jar");
-      if (existsSync(apiSrc) && !existsSync(join(MOD_JAR_RUNTIME_DIR, "fabric-api.jar"))) {
-        await fs.copyFile(apiSrc, join(MOD_JAR_RUNTIME_DIR, "fabric-api.jar"));
-      }
-    } catch {}
-    hideJarFile(MOD_JAR_RUNTIME);
-    return existsSync(MOD_JAR_RUNTIME);
+    return existsSync(MOD_JAR);
   } catch { return false; }
 }
 async function cleanupModAfterLaunch() {
-  try {
-    await fs.rm(MOD_JAR_RUNTIME_DIR, { recursive: true, force: true });
-  } catch {}
   try { if (existsSync(MOD_JAR)) await fs.rm(MOD_JAR, { force: true }); } catch {}
 }
 
