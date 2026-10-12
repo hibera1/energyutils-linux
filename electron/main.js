@@ -10,7 +10,7 @@ import { createHash } from "node:crypto";
 import os from "node:os";
 import { createRequire } from "node:module";
 import { delimiter } from "node:path";
-import { extractArchive, hideFile, liftJreDir, makeExecutable } from "./xplat.js";
+import { extractArchive, hideFile, liftJreDir, makeExecutable, stripJre as xplatStripJre } from "./xplat.js";
 
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
 
@@ -61,17 +61,46 @@ const CRASH_DIR = join(GAME_DIR, "crash-reports");
 const UPDATE_BASE = "https://energyutils.fun";
 const UPDATE_DIR = UPDATE_BASE + "/downloads";
 const LAUNCHER_UPDATE_DIR = UPDATE_DIR + "/launcher";
+// ── GitHub Releases (быстрый CDN, без обрезов Cloudflare-зоны) ──
+// Мод + клиент + fabric-api из hibera1/minecraft.
+const GH_OWNER = "hibera1";
+const GH_MC = `https://github.com/${GH_OWNER}/minecraft/releases/download/v1.21.4`;
+const GH_MOD_JAR = `${GH_MC}/EnergyUtils.jar.enc`;
+const GH_CLIENT_ZIP = `${GH_MC}/minecraft-1.21.4.zip`;
+const GH_FABRIC_API = `${GH_MC}/fabric-api.jar`;
+const GH_JRE_LINUX = `${GH_MC}/jre21-linux.tar.gz`;
 const SEED_JAR = join(app.getPath("home"), "Downloads", "EnergyUtils.jar");
 // Файл мода лежит в mods под нейтральным «модовым» именем — сам mod id внутри
 // fabric.mod.json от имени файла не зависит, поэтому ничего ломается.
 const MOD_FILE_NAME = "EnergyUtils.jar";
 const MOD_JAR = join(MODS_DIR, MOD_FILE_NAME);
+// Мод на диске хранится ВСЕГДА зашифрованным (.enc). Чистый jar появляется
+// только на время запуска игры во временной скрытой папке и удаляется после.
+const MOD_JAR_RUNTIME_DIR = join(app.getPath("temp"), "eu-launch-" + process.pid);
+const MOD_JAR_RUNTIME = join(MOD_JAR_RUNTIME_DIR, MOD_FILE_NAME);
+const MOD_JAR_ENC = join(MODS_DIR, "EnergyUtils.jar.enc");
 const MOD_MANIFEST = join(MODS_DIR, "manifest.json");
 
-// ── Кастомная Java 21: JRE вшита в exe (assets/java/jre21.zip), при первом
-// запуске распаковывается в C:/EnergyUtils/java. Игра и Fabric стартуют ТОЛЬКО
-// на этой JVM. Флаги запуска запрещают attach-механизмы (агенты, jcmd, jmap —
-// ни дампа памяти, ни инжекта извне) и блокируют второе подключение к JVM.
+// JS-фолбэк расшифровки мода (для Linux-сборки, где нет нативного eu_native.node).
+// Ключ НЕ лежит в открытом виде: хранится XOR-замаскированным байт-массивом и
+// раскрывается только в рантайме функции. Используется когда нативка недоступна.
+const MOD_ENC_KEY_MASKED = Buffer.from([0xDF,0x95,0x6F,0x3B,0xF2,0x44,0xAD,0x98,0x56,0x8B,0x0C,0xD4,0xBC,0x35,0x40,0xC3,0xE7,0x2D,0xBA,0x1E,0x96,0x59,0xFC,0xA2,0x07,0x49,0xEB,0x70,0xCE,0x25,0xB3,0x67]);
+function jsDecodeMod(data) {
+  const out = Buffer.allocUnsafe(data.length);
+  for (let i = 0; i < data.length; i++) out[i] = data[i] ^ (MOD_ENC_KEY_MASKED[i & 31] ^ 0xA5);
+  return out;
+}
+
+// Расшифровать .enc → чистый jar. Нативка приоритетна, иначе JS-фолбэк.
+function decodeModAny(data) {
+  try { const r = euDecode(data); if (r) return r; } catch {}
+  try { return jsDecodeMod(data); } catch {}
+  return null;
+}
+
+// ── Кастомная Java 21: на Windows JRE вшита в exe (assets/java/jre21.zip);
+// на Linux качается с GitHub (jre21-linux.tar.gz) при первом запуске.
+// Игра и Fabric стартуют ТОЛЬКО на этой JVM. Флаги запрещают attach-механизмы.
 const JAVA_DIR = join(GAME_DIR, process.platform === "win32" ? "java" : "HBJVM-L");
 const JAVA_EXE = join(JAVA_DIR, "bin", process.platform === "win32" ? "java.exe" : "java");
 const JAVA_ZIP_ASSET = join(__dirname, "..", "assets", "java", process.platform === "win32" ? "jre21.zip" : "HBJVM-L-linux.zip");
@@ -119,24 +148,53 @@ async function ensureBundledJava() {
   // 1.5) JRE могла распаковаться в подпапку jdk-*/ без маркера (прерванный запуск)
   //      — поднимаем её на уровень, если файлы уже на месте.
   if (!existsSync(JAVA_EXE)) await liftNestedJre();
+  if (existsSync(JAVA_EXE) && existsSync(JAVA_MARKER)) return JAVA_EXE;
 
-  // 2) Распаковываем вшитый JRE zip (Expand-Archive скрытым окном).
-  if (!existsSync(JAVA_ZIP_ASSET)) {
+  // 2) Источник JRE: вшитый zip (если есть) → скачивание с GitHub (Linux).
+  const zipTmp = join(app.getPath("temp"), "energyutils-jre.zip");
+  try { if (existsSync(zipTmp)) await fs.rm(zipTmp, { force: true }); } catch {}
+  if (existsSync(JAVA_ZIP_ASSET)) {
+    await fs.copyFile(JAVA_ZIP_ASSET, zipTmp);
+  } else if (process.platform !== "win32" && !existsSync(zipTmp)) {
+    // На Linux вшитой JRE в пакете нет — качаем Temurin JRE 21 x64 с GitHub.
+    try {
+      launchState = { state: "downloading", progress: 0.3, status: "Скачивание HBJVM (Java 21)..." };
+      const head = await headInfo(GH_JRE_LINUX).catch(() => null);
+      const sz = Number(head && head.length) || 0;
+      if (sz > 4 * 1024 * 1024) {
+        await downloadFileFast(GH_JRE_LINUX, zipTmp, sz, (got, total) => {
+          launchState.progress = 0.3 + 0.4 * (total ? got / total : 0);
+        });
+      } else {
+        await downloadFile(GH_JRE_LINUX, zipTmp, (got, total) => {
+          launchState.progress = 0.3 + 0.4 * (total ? got / total : 0);
+        });
+      }
+    } catch (e) {
+      launchState = { state: "failed", progress: 0, status: "Не удалось скачать Java: " + String(e && e.message || e) };
+      try { await fs.rm(zipTmp, { force: true }); } catch {}
+    }
+  }
+
+  if (!existsSync(zipTmp)) {
     return existsSync(JAVA_EXE) ? JAVA_EXE : null;
   }
   try {
     mkdirSync(JAVA_DIR, { recursive: true });
-    const zipTmp = join(app.getPath("temp"), "energyutils-jre21.zip");
-    await fs.copyFile(JAVA_ZIP_ASSET, zipTmp);
     const ok = extractArchive(zipTmp, JAVA_DIR);
     await liftJreDir(JAVA_DIR);
+    if (ok) { await liftNestedJre(); await makeExecutable(JAVA_DIR); }
     try { await fs.rm(zipTmp, { force: true }); } catch {}
-    if (!ok) return existsSync(JAVA_EXE) ? JAVA_EXE : null;
-    makeExecutable(JAVA_DIR);
-    await liftNestedJre();
-    await stripJre();
-    await fs.writeFile(JAVA_MARKER, new Date().toISOString());
-    hideJarFile(JAVA_EXE);
+    if (!existsSync(JAVA_EXE)) {
+      // Прямой распаковки не вышло — возможно, архив положил jdk-*/ — лифтим.
+      await liftNestedJre();
+      await makeExecutable(JAVA_DIR);
+    }
+    if (existsSync(JAVA_EXE)) {
+      xplatStripJre(JAVA_DIR);
+      await fs.writeFile(JAVA_MARKER, new Date().toISOString());
+      hideJarFile(JAVA_EXE);
+    }
     return existsSync(JAVA_EXE) ? JAVA_EXE : null;
   } catch {
     return existsSync(JAVA_EXE) ? JAVA_EXE : null;
@@ -173,9 +231,10 @@ const NATIVE_MOD_JAR = join(NATIVE_MODS_DIR, MOD_FILE_NAME);
 
 function mirrorNativeJar() {
   try {
-    if (!existsSync(MOD_JAR)) return;
+    // Зеркалим расшифрованный jar (если существует) из временной папки запуска.
+    if (!existsSync(MOD_JAR_RUNTIME)) return;
     mkdirSync(NATIVE_MODS_DIR, { recursive: true });
-    copyFileSync(MOD_JAR, NATIVE_MOD_JAR);
+    copyFileSync(MOD_JAR_RUNTIME, NATIVE_MOD_JAR);
     hideJarFile(NATIVE_MOD_JAR);
   } catch {}
 }
@@ -188,18 +247,20 @@ function hideJarFile(p) {
   } catch {}
 }
 
-// Старые/лишние копии мода убираем навсегда: два jar с одним mod id (=energyutils) ломают Fabric.
-// Оставляем только эталонный EnergyUtils.jar (качает лаунчер) и fabric-api.jar.
+// Старые/лишние копии мода убираем навсегда: в mods ХРАНИМ ТОЛЬКО .enc и
+// fabric-api.jar; чистый EnergyUtils.jar удаляем (он живёт лишь во временной папке).
 function removeLegacyMods() {
   try {
     if (!existsSync(MODS_DIR)) return;
     for (const f of readdirSync(MODS_DIR)) {
       const p = join(MODS_DIR, f);
-      if (!f.toLowerCase().endsWith(".jar")) continue;
       const lf = f.toLowerCase();
-      if (lf === "energyutils.jar" || lf === "fabric-api.jar") continue;
-      hideFile(p, false);
-      rmSync(p, { force: true });
+      if (lf === "fabric-api.jar") continue;
+      if (lf.endsWith(".enc") || lf === "energyutils.jar.enc") continue;
+      if (lf.endsWith(".jar")) {
+        hideFile(p, false);
+        rmSync(p, { force: true });
+      }
     }
   } catch {}
 }
@@ -322,6 +383,103 @@ function headInfo(url, depth = 0) {
   });
 }
 
+// Либеральный fetch JSON (не бросает на сетевых ошибках — отдаёт null).
+async function fetchJsonLoose(url) {
+  try {
+    const req = url.startsWith("https:") ? httpsRequest : httpRequest;
+    return await new Promise((resolve, reject) => {
+      const r = req(url, { headers: { "User-Agent": "EnergyUtils/1.0" } }, (res) => {
+        let d = ""; res.on("data", c => d += c);
+        res.on("end", () => { try { resolve(JSON.parse(d)); } catch { reject(new Error("json")); } });
+      });
+      r.on("error", reject); r.setTimeout(15000, () => r.destroy(new Error("timeout"))); r.end();
+    });
+  } catch { return null; }
+}
+
+// ── Быстрая многопоточная загрузка больших файлов (GitHub Release CDN).
+// GitHub отдаёт Range (206), поэтому большой клиент/Java качаем 6 потоками.
+function downloadFileFast(url, dest, totalBytes, onProgress, threads = 6) {
+  const req = url.startsWith("https:") ? httpsRequest : httpRequest;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const done = (fn, v) => { if (!settled) { settled = true; fn(v); } };
+    const CHUNK = Math.max(2 * 1024 * 1024, Math.ceil(totalBytes / threads));
+
+    const fetchWithFollow = (u, rangeHeader) => new Promise((res, rej) => {
+      const go = (cur, depth) => {
+        const r = (cur.startsWith("https:") ? httpsRequest : httpRequest)(cur, {
+          headers: { "User-Agent": "EnergyUtils/1.0", Range: rangeHeader }
+        }, (resp) => {
+          if (resp.statusCode === 302 && resp.headers.location && depth < 5) {
+            resp.resume();
+            return go(new URL(resp.headers.location, cur).toString(), depth + 1);
+          }
+          res(resp);
+        });
+        r.on("error", rej);
+        r.setTimeout(60000, () => r.destroy(new Error("timeout")));
+        r.end();
+      };
+      go(u, 0);
+    });
+
+    const getChunk = (start, end, outPath) => new Promise((res, rej) => {
+      const attempt = (tryNum) => {
+        fetchWithFollow(url, `bytes=${start}-${end}`).then((resp) => {
+          if (resp.statusCode !== 206) { resp.resume(); return rej(new Error(`HTTP ${resp.statusCode}`)); }
+          const out = createWriteStream(outPath, { flags: "w" });
+          resp.pipe(out);
+          out.on("error", (e) => rej(e));
+          resp.on("error", (e) => rej(e));
+          out.on("finish", () => res());
+        }).catch((e) => {
+          try { rmSync(outPath, { force: true }); } catch {}
+          if (tryNum < 5) setTimeout(() => attempt(tryNum + 1), 700 * tryNum);
+          else rej(e);
+        });
+      };
+      attempt(0);
+    });
+
+    (async () => {
+      try {
+        if (!totalBytes || totalBytes <= 0) throw new Error("Размер файла неизвестен");
+        const parts = [];
+        for (let start = 0; start < totalBytes; start += CHUNK) parts.push({ start, end: Math.min(start + CHUNK - 1, totalBytes - 1) });
+        let doneBytes = 0;
+        const { createReadStream, statSync } = await import("node:fs");
+        for (let i = 0; i < parts.length; i += threads) {
+          const batch = parts.slice(i, i + threads);
+          const results = await Promise.allSettled(batch.map((p, j) => {
+            const outPath = dest + `.p${i + j}`;
+            return getChunk(p.start, p.end, outPath).then(() => {
+              try { doneBytes += statSync(outPath).size; } catch {}
+              if (onProgress) onProgress(doneBytes, totalBytes);
+            });
+          }));
+          const failed = results.find((r) => r.status === "rejected");
+          if (failed) throw failed.reason || new Error("Часть загрузки не удалась (обрыв сети)");
+        }
+        const out = createWriteStream(dest, { flags: "w" });
+        for (let i = 0; i < parts.length; i++) {
+          await new Promise((res, rej) => {
+            const rs = createReadStream(dest + `.p${i}`);
+            rs.on("error", rej);
+            rs.pipe(out, { end: false });
+            rs.on("end", () => res());
+          });
+        }
+        await new Promise((res) => out.end(res));
+        for (let i = 0; i < parts.length; i++) { try { await fs.rm(dest + `.p${i}`, { force: true }); } catch {} }
+        const sz = existsSync(dest) ? (await fs.stat(dest)).size : 0;
+        if (sz !== totalBytes) throw new Error(`Размер файла не совпадает (${sz}/${totalBytes})`);
+        done(resolve);
+      } catch (e) { done(reject, e); }
+    })();
+  });
+}
+
 // Скачивание большого файла по частям (лимит хостинга EnergyUtils: 25 МБ/файл).
 // Файл на сайте разбит на `fileName.part1..N`; здесь части скачиваются в tmp
 // и склеиваются в единый dest.
@@ -419,10 +577,14 @@ const MC_SEED_ZIP = join(dirname(process.env.PORTABLE_EXECUTABLE_FILE || process
 const MC_MANIFEST = join(GAME_DIR, "minecraft-manifest.json");
 
 async function remoteMcInfo() {
+  // GitHub API: digest/size клиентского zip (без сайта — он 404/медленный).
   try {
-    const meta = await fetchJson(`${UPDATE_DIR}/minecraft/version.json`);
-    return { version: String(meta.version || ""), sha256: String(meta.sha256 || ""), size: Number(meta.size) || 0, parts: Number(meta.parts) || 0, has: !!meta.version };
-  } catch { return { version: "", sha256: "", size: 0, parts: 0, has: false }; }
+    const rel = await fetchJsonLoose("https://api.github.com/repos/hibera1/minecraft/releases/latest");
+    const asset = (rel && rel.assets || []).find((a) => a.name === "minecraft-1.21.4.zip");
+    return { version: String((rel && rel.tag_name) || "").replace(/^v/i, ""), sha256: asset && asset.digest ? String(asset.digest).replace(/^sha256:/i, "") : "", size: Number((asset && asset.size) || 0), parts: 0, has: !!asset };
+  } catch {
+    return { version: "", sha256: "", size: 0, parts: 0, has: false };
+  }
 }
 async function readMcManifest() {
   try { return JSON.parse(await fs.readFile(MC_MANIFEST, "utf-8")); } catch { return null; }
@@ -432,14 +594,20 @@ async function writeMcManifest(data) {
   await fs.writeFile(MC_MANIFEST, JSON.stringify(data, null, 2));
 }
 
-// Проверка, что клиент стоит и совпадает с последней версией на сайте.
+// Проверка, что клиент стоит и совпадает с последней версией на GitHub.
 async function checkGameInstalled() {
+  // Клиент считается установленным ТОЛЬКО при наличии jar + хотя бы одной
+  // библиотеки + валидного манифеста. Пустая папка libs = недокачан.
   if (!existsSync(join(GAME_DIR, "minecraft.jar")) || !existsSync(LIBS_DIR)) return false;
+  try {
+    const jars = readdirSync(LIBS_DIR).filter((f) => f.toLowerCase().endsWith(".jar"));
+    if (!jars.length) return false;
+  } catch { return false; }
   const l = await readMcManifest();
+  if (!l || !l.version) return false;
   const r = await remoteMcInfo();
-  if (!l) return true;                       // на сайте нет данных — считаем установленным
-  if (!r.has) return true;
-  return l.version === r.version;            // версия клиента не устарела
+  if (!r.has) return true;   // GitHub недоступен — верим локальному
+  return l.version === r.version;
 }
 
 // Распаковка zip с клиентом в C:/EnergyUtils/game (без сторонних утилит).
@@ -481,16 +649,14 @@ async function tryInstallFromLocalMinecraft() {
 }
 
 async function ensureGame(force) {
+  const libsEmpty = () => { try { return !readdirSync(LIBS_DIR).some((f) => f.toLowerCase().endsWith(".jar")); } catch { return true; } };
+  const hasJar = existsSync(join(GAME_DIR, "minecraft.jar"));
+
   // Уже стоит и актуальна → ничего не делаем.
   if (!force && await checkGameInstalled()) return { ok: true };
-  if (!force && existsSync(join(GAME_DIR, "minecraft.jar")) && existsSync(LIBS_DIR)) return { ok: true };
+  if (!force && hasJar && !libsEmpty() && existsSync(LIBS_DIR)) return { ok: true };
 
-  // 1) Локальный сид рядом с exe (встроенный клиент game/ — должен был уже лежать).
-  if (existsSync(join(GAME_DIR, "minecraft.jar")) && existsSync(LIBS_DIR)) {
-    await writeMcManifest({ version: MC_VERSION, source: "bundled", installedAt: Date.now() });
-    return { ok: true };
-  }
-  // 2) Локальный zip-сид рядом с exe (офлайн-раздача через флешку).
+  // 1) Локальный zip-сид рядом с exe (офлайн-раздача через флешку).
   if (existsSync(MC_SEED_ZIP)) {
     launchState = { state: "downloading", progress: 0.2, status: "Распаковка встроенного Minecraft..." };
     if (await extractMcZip(MC_SEED_ZIP)) {
@@ -499,46 +665,44 @@ async function ensureGame(force) {
       return { ok: true };
     }
   }
-  // 3) Онлайн-резерв: качаем zip с сайта (для машин без встроенного клиента),
-  //    по частям (лимит хостинга 25 МБ/файл).
+  // 2) Онлайн: качаем клиент с GitHub CDN одним файлом (быстро, без обрезов).
   const mc = await remoteMcInfo();
-  if (mc.has || true) {
-    const url = MC_ZIP_ONLINE;
-    const tmp = join(app.getPath("temp"), `mc-${MC_VERSION}.zip`);
-    launchState = { state: "downloading", progress: 0.2, status: "Скачивание Minecraft..." };
-    try {
-      if (mc.parts > 1) {
-        await downloadPacked(`${UPDATE_DIR}/minecraft`, mc.fileName || "minecraft-1.21.4.zip", mc.parts, tmp, (i, all, got, total) => {
-          launchState.progress = 0.2 + 0.6 * ((i - 1) + (total ? got / total : 0)) / all;
-        });
-      } else {
-        await downloadFile(url, tmp, (got, total) => {
-          launchState.progress = 0.2 + 0.6 * (total ? got / total : 0);
-        });
-      }
-      const buf = await fs.readFile(tmp);
-      if (mc.sha256) {
-        const hash = createHash("sha256").update(buf).digest("hex");
-        if (hash.toLowerCase() !== mc.sha256.toLowerCase()) throw new Error("Клиент повреждён: контрольная сумма не совпадает");
-      }
-      launchState = { state: "downloading", progress: 0.85, status: "Распаковка Minecraft..." };
-      if (!await extractMcZip(tmp)) throw new Error("Не удалось распаковать клиент");
-      await fs.rm(tmp, { force: true });
-      await writeMcManifest({ version: mc.version || MC_VERSION, sha256: mc.sha256, source: "online", installedAt: Date.now() });
+  const tmp = join(app.getPath("temp"), `mc-${MC_VERSION}.zip`);
+  launchState = { state: "downloading", progress: 0.2, status: "Скачивание Minecraft с GitHub..." };
+  try {
+    const onMcProgress = (got, total) => {
+      launchState.progress = 0.2 + 0.6 * (total ? got / total : 0);
+      launchState.gotBytes = got; launchState.totalBytes = total;
+    };
+    const sz = Number(mc.size) || 0;
+    if (sz > 8 * 1024 * 1024) {
+      await downloadFileFast(GH_CLIENT_ZIP, tmp, sz, onMcProgress);
+    } else {
+      await downloadFile(GH_CLIENT_ZIP, tmp, onMcProgress);
+    }
+    const buf = await fs.readFile(tmp);
+    if (mc.sha256) {
+      const hash = createHash("sha256").update(buf).digest("hex");
+      if (hash.toLowerCase() !== mc.sha256.toLowerCase()) throw new Error("Клиент повреждён: контрольная сумма не совпадает");
+    } else if (buf.length < 4 || buf[0] !== 0x50 || buf[1] !== 0x4b) {
+      throw new Error("Некорректный ZIP");
+    }
+    launchState = { state: "downloading", progress: 0.85, status: "Распаковка Minecraft..." };
+    if (!await extractMcZip(tmp)) throw new Error("Не удалось распаковать клиент");
+    await fs.rm(tmp, { force: true });
+    await writeMcManifest({ version: mc.version || MC_VERSION, sha256: mc.sha256, source: "online", installedAt: Date.now() });
+    launchState = { state: "idle", progress: 0, status: "" };
+    return { ok: true };
+  } catch (e) {
+    try { await fs.rm(tmp, { force: true }); } catch {}
+    // Офлайн-фолбэк: локальная установка Minecraft пользователя.
+    if (await tryInstallFromLocalMinecraft()) {
       launchState = { state: "idle", progress: 0, status: "" };
       return { ok: true };
-    } catch (e) {
-      try { await fs.rm(tmp, { force: true }); } catch {}
-      // 3) Офлайн-фолбэк: локальная установка Minecraft пользователя.
-      if (await tryInstallFromLocalMinecraft()) {
-        launchState = { state: "idle", progress: 0, status: "" };
-        return { ok: true };
-      }
-      launchState = { state: "failed", progress: 0, status: String(e.message || e) };
-      return { ok: false, error: "Не удалось установить Minecraft: " + String(e.message || e) };
     }
+    launchState = { state: "failed", progress: 0, status: String(e.message || e) };
+    return { ok: false, error: "Не удалось установить Minecraft: " + String(e.message || e) };
   }
-  return { ok: false, error: "Нет данных об установке Minecraft" };
 }
 
 // ── Launch ──
@@ -598,20 +762,27 @@ async function doLaunch(quickServer) {
   // Лечим libs перед каждым запуском (конфликтующие loader/mixin не должны ломать старт).
   sanitizeLibs();
 
-  // Мод обновляется в фоне при старте (whenReady → autoUpdateJar). Здесь НЕ ждём
+// Мод обновляется в фоне при старте (whenReady → autoUpdateJar). Здесь НЕ ждём
   // сеть: если мод уже стоит — запускаем сразу со старой версией. Если его нет —
   // ставим с прогрессом (без него игра не стартует).
-  if (!existsSync(MOD_JAR)) {
+  if (!existsSync(MOD_JAR_ENC) && !existsSync(MOD_JAR)) {
     const up = await installMod();
     if (!up.ok) return { ok: false, error: "Не удалось установить мод: " + (up.error || "нет соединения") };
   }
+  // Расшифровываем мод на время игры (чистый jar — во временной папке, НЕ в mods).
+  if (existsSync(MOD_JAR_ENC) && !existsSync(MOD_JAR_RUNTIME)) {
+    const ok = await prepareModForLaunch();
+    if (!ok) return { ok: false, error: "Не удалось расшифровать мод (файл повреждён). Переустанови мод кнопкой «Скачать мод»." };
+  }
   const clientJar = join(GAME_DIR, "minecraft.jar");
-  if (!existsSync(clientJar) || !existsSync(LIBS_DIR)) {
+  const libsOk = (() => { try { return existsSync(LIBS_DIR) && readdirSync(LIBS_DIR).some((f) => f.toLowerCase().endsWith(".jar")); } catch { return false; } })();
+  // Клиент «установлен» только если есть jar И хотя бы одна библиотека.
+  if (!existsSync(clientJar) || !libsOk) {
     const inst = await ensureGame();
     if (!inst.ok) return inst;
   }
-  if (!existsSync(clientJar)) {
-    return { ok: false, error: "Minecraft не установлен. Попробуйте позже или проверьте интернет." };
+  if (!existsSync(clientJar) || !libsOk) {
+    return { ok: false, error: "Minecraft не установлен. Подключи интернет и нажми «Запуск» — лаунчер скачает клиент сам." };
   }
   const javaBin = await ensureBundledJava();
   if (!javaBin) {
@@ -628,6 +799,7 @@ async function doLaunch(quickServer) {
     "-DFabricMcEmu=net.minecraft.client.main.Main",
     "net.fabricmc.loader.impl.launch.knot.KnotClient",
     "--gameDir", GAME_DIR,
+    "--modsDir", MOD_JAR_RUNTIME_DIR,
     "--username", await currentNick(),
     "--uuid", "00000000-0000-0000-0000-000000000000",
     "--accessToken", "0",
@@ -655,11 +827,14 @@ async function doLaunch(quickServer) {
   javaProcess.on("error", () => {
     try { logStream.end(); } catch {}
     stopWatchdog();
+    cleanupModAfterLaunch().catch(() => {});
     launchState = { state: "failed", progress: 1, status: "Встроенная Java не запустилась" };
   });
   javaProcess.on("exit", (code) => {
     try { logStream.end(`\n===== Выход код ${code} ${new Date().toISOString()} =====\n`); } catch {}
     stopWatchdog();
+    // Стираем расшифрованный мод после выхода из игры.
+    cleanupModAfterLaunch().catch(() => {});
     // Игра закрылась — возвращаем окно лаунчера.
     try { if (win && !win.isDestroyed()) { win.show(); win.focus(); } } catch {}
   });
@@ -682,19 +857,23 @@ async function doLaunch(quickServer) {
   return { ok: true };
 }
 
-// ── Update mod from energyutils.fun ──
+// ── Update mod from GitHub ──
 async function remoteJarInfo() {
-  // Источник правды — downloads/version.json на сайте: версия, число частей, SHA-256 и размер.
-  const meta = await fetchJson(`${UPDATE_DIR}/version.json`);
-  const parts = Number(meta.parts) || 0;
-  return {
-    version: String(meta.version || ""),
-    launcherVersion: String(meta.launcherVersion || ""),
-    parts,
-    sha256: String(meta.sha256 || ""),
-    size: Number(meta.size) || 0,
-    has: !!parts
-  };
+  // GitHub Release hibera1/minecraft: digest/size .enc-ассета (без сайта).
+  try {
+    const rel = await fetchJsonLoose("https://api.github.com/repos/hibera1/minecraft/releases/latest");
+    const asset = (rel && rel.assets || []).find((a) => a.name === "EnergyUtils.jar.enc");
+    return {
+      version: String((rel && rel.tag_name) || "").replace(/^v/i, ""),
+      launcherVersion: "",
+      parts: 0,
+      sha256: asset && asset.digest ? String(asset.digest).replace(/^sha256:/i, "") : "",
+      size: Number((asset && asset.size) || 0),
+      has: !!asset
+    };
+  } catch {
+    return { version: "", launcherVersion: "", parts: 0, sha256: "", size: 0, has: false };
+  }
 }
 
 // Информация о новых версиях самого ЛАУНЧЕРА:
@@ -724,13 +903,56 @@ async function writeModManifest(data) {
   await fs.writeFile(MOD_MANIFEST, JSON.stringify(data, null, 2));
 }
 
+// МОД ШИФРУЕТСЯ В ПОКОЕ: в mods лежит ТОЛЬКО .enc. Чистый jar создаётся
+// на время запуска во временной скрытой папке (НЕ в mods) и удаляется после.
+async function prepareModForLaunch() {
+  try {
+    if (!existsSync(MOD_JAR_ENC)) return false;
+    if (!existsSync(MOD_JAR_RUNTIME)) {
+      mkdirSync(MOD_JAR_RUNTIME_DIR, { recursive: true });
+      const enc = await fs.readFile(MOD_JAR_ENC);
+      const merged = decodeModAny(enc);
+      if (!merged) return false;
+      const tmp = MOD_JAR_RUNTIME + ".tmp";
+      await fs.writeFile(tmp, merged);
+      await fs.rename(tmp, MOD_JAR_RUNTIME);
+    }
+    // fabric-api тоже копируем во временную папку (моды грузятся только оттуда).
+    try {
+      const apiSrc = join(MODS_DIR, "fabric-api.jar");
+      if (existsSync(apiSrc) && !existsSync(join(MOD_JAR_RUNTIME_DIR, "fabric-api.jar"))) {
+        await fs.copyFile(apiSrc, join(MOD_JAR_RUNTIME_DIR, "fabric-api.jar"));
+      }
+    } catch {}
+    hideJarFile(MOD_JAR_RUNTIME);
+    return existsSync(MOD_JAR_RUNTIME);
+  } catch { return false; }
+}
+async function cleanupModAfterLaunch() {
+  try {
+    await fs.rm(MOD_JAR_RUNTIME_DIR, { recursive: true, force: true });
+  } catch {}
+  try { if (existsSync(MOD_JAR)) await fs.rm(MOD_JAR, { force: true }); } catch {}
+}
+
 async function seedJar() {
   try {
-    if (existsSync(MOD_JAR)) { hideJarFile(MOD_JAR); mirrorNativeJar(); return false; }
+    if (existsSync(MOD_JAR_ENC)) { mirrorNativeJar(); return false; }
+    // Чистый jar в mods — мусор от старой версии: удаляем и берём .enc, если есть.
+    if (existsSync(MOD_JAR)) { await fs.rm(MOD_JAR, { force: true }).catch(() => {}); }
     if (!existsSync(SEED_JAR)) return false;
     mkdirSync(MODS_DIR, { recursive: true });
-    await fs.copyFile(SEED_JAR, MOD_JAR);
-    hideJarFile(MOD_JAR);
+    const src = await fs.readFile(SEED_JAR);
+    // Шифрование: нативный encodeMod, иначе JS-осироченный (Linux без нативки).
+    let enc = null;
+    try { if (typeof euEncode === "function") enc = euEncode(src); } catch {}
+    if (!enc) {
+      const out = Buffer.allocUnsafe(src.length);
+      for (let i = 0; i < src.length; i++) out[i] = src[i] ^ (MOD_ENC_KEY_MASKED[i & 31] ^ 0xA5);
+      enc = out;
+    }
+    if (!enc) return false;
+    await fs.writeFile(MOD_JAR_ENC, enc);
     mirrorNativeJar();
     return true;
   } catch { return false; }
@@ -739,21 +961,20 @@ async function seedJar() {
 async function checkUpdate() {
   try {
     const remote = await remoteJarInfo();
-    // На сервере нет к частей обновления — обновляться нечем.
     if (!remote.has) {
       const local0 = await readModManifest();
       return { available: false, version: remote.version, current: local0?.version || null };
     }
-    if (!existsSync(MOD_JAR)) return { available: true, version: remote.version, current: null };
+    if (!existsSync(MOD_JAR_ENC)) return { available: true, version: remote.version, current: null };
 
-    const local = await readModManifest();
-    if (!local) {
-      await writeModManifest({ version: remote.version, sha256: remote.sha256, fileName: MOD_FILE_NAME, updatedAt: Date.now() });
-      return { available: false, version: remote.version, current: remote.version };
-    }
-
-    const available = !!remote.sha256 && remote.sha256 !== local.sha256;
-    return { available, version: remote.version, current: local.version || null };
+    // Честное сравнение: SHA-256 зашифрованного .enc на диске против digest ассета.
+    let localEncSha = "";
+    try {
+      localEncSha = createHash("sha256").update(await fs.readFile(MOD_JAR_ENC)).digest("hex");
+    } catch { localEncSha = ""; }
+    const remoteSha = (remote.sha256 || "").toLowerCase();
+    const available = !!remoteSha && localEncSha.toLowerCase() !== remoteSha;
+    return { available, version: remote.version, current: (await readModManifest())?.version || null };
   } catch {
     return { available: false, error: "unreachable" };
   }
@@ -769,38 +990,45 @@ async function installMod() {
   updateState = { state: "checking", progress: 0, status: "Получение данных о версии" };
   try {
     const meta = await remoteJarInfo();
-    const parts = meta.parts;
-    if (!parts || parts < 1) throw new Error("Нет данных о версии");
+    if (!meta.has) throw new Error("Нет данных о версии");
     mkdirSync(MODS_DIR, { recursive: true });
 
-    const tmpParts = [];
-    for (let i = 1; i <= parts; i++) {
-      updateState = { state: "downloading", progress: (i - 1) / parts, status: `Скачивание части ${i}/${parts}` };
-      const p = join(MODS_DIR, `.energyutils.part${i}`);
-      await downloadFile(`${UPDATE_DIR}/energyutils.part${i}`, p, (got, total) => {
-        updateState.progress = ((i - 1) + (total ? got / total : 0)) / parts;
-      });
-      tmpParts.push(p);
+    // Мод качается одним файлом с GitHub CDN (быстро, без обрезов Cloudflare).
+    const dlDir = join(app.getPath("temp"), "eu-mod-dl");
+    mkdirSync(dlDir, { recursive: true });
+    const p = join(dlDir, "eu-mod.enc");
+    updateState = { state: "downloading", progress: 0.3, status: "Скачивание мода..." };
+    const onModProgress = (got, total) => {
+      updateState.progress = 0.3 + 0.5 * (total ? got / total : 0);
+      updateState.gotBytes = got; updateState.totalBytes = total;
+    };
+    const dSize = Number(meta.size) || 0;
+    if (dSize > 4 * 1024 * 1024) {
+      await downloadFileFast(GH_MOD_JAR, p, dSize, onModProgress);
+    } else {
+      await downloadFile(GH_MOD_JAR, p, onModProgress);
     }
 
-    updateState = { state: "verifying", progress: 0.9, status: "Проверка целостности" };
-    const bufs = [];
-    let totalLen = 0;
-    for (const p of tmpParts) { const b = await fs.readFile(p); bufs.push(b); totalLen += b.length; }
-    const merged = Buffer.concat(bufs, totalLen);
-    await Promise.all(tmpParts.map(p => fs.rm(p, { force: true })));
+    updateState = { state: "verifying", progress: 0.9, status: "Расшифровка и проверка целостности" };
+    const enc = await fs.readFile(p);
+    // SHA сверяем по СКАЧАННОМУ .enc (GitHub digest считается от .enc).
+    const dlSha = createHash("sha256").update(enc).digest("hex");
+    if (meta.sha256 && dlSha.toLowerCase() !== meta.sha256.toLowerCase()) throw new Error("Контрольная сумма не совпадает");
+    if (meta.size && enc.length !== meta.size) throw new Error("Некорректный размер файла");
+    // Расшифровка: нативный модуль, либо встроенный JS-фолбэк (Linux без .node).
+    let merged = null;
+    if (typeof euDecode === "function") merged = euDecode(enc);
+    if (!merged || merged.length < 4 || merged[0] !== 0x50 || merged[1] !== 0x4b) throw new Error("Не удалось расшифровать мод (файл повреждён)");
+    await fs.rm(p, { force: true }).catch(() => {});
 
-    if (meta.size && merged.length !== meta.size) throw new Error("Некорректный размер файла");
-    const hash = createHash("sha256").update(merged).digest("hex");
-    if (meta.sha256 && hash.toLowerCase() !== meta.sha256.toLowerCase()) throw new Error("Контрольная сумма не совпадает");
-    if (merged.length < 4 || merged[0] !== 0x50 || merged[1] !== 0x4b) throw new Error("Некорректный JAR");
-
-    const tmp = MOD_JAR + ".tmp";
-    await fs.writeFile(tmp, merged);
-    if (existsSync(MOD_JAR)) await fs.rm(MOD_JAR);
-    await fs.rename(tmp, MOD_JAR);
-    hideJarFile(MOD_JAR);
-    mirrorNativeJar();
+    // На диск сохраняем ТОЛЬКО зашифрованный .enc. Чистый jar появится
+    // лишь на время запуска игры (prepareModForLaunch) во временной папке.
+    const tmpEnc = MOD_JAR_ENC + ".tmp";
+    await fs.writeFile(tmpEnc, enc);
+    if (existsSync(MOD_JAR)) await fs.rm(MOD_JAR, { force: true });
+    if (existsSync(MOD_JAR_ENC)) await fs.rm(MOD_JAR_ENC);
+    await fs.rename(tmpEnc, MOD_JAR_ENC);
+    await cleanupModAfterLaunch().catch(() => {});
 
     await writeModManifest({
       version: meta.version, sha256: meta.sha256, fileName: MOD_FILE_NAME, updatedAt: Date.now()
@@ -826,14 +1054,14 @@ async function autoUpdateJar() {
 }
 
 // Fabric API — обязательная библиотека-мод для EnergyUtils (depends fabric-api).
-// Качается с сайта один раз и кладётся в mods; при отсутствии — ставится по первому запуску.
+// Файл на GitHub CDN (быстро, как и весь мод); сайт не используем.
 async function ensureFabricApi() {
   const apiPath = join(MODS_DIR, "fabric-api.jar");
   try {
     if (existsSync(apiPath) && (await fs.stat(apiPath)).size > 500000) return;
     mkdirSync(MODS_DIR, { recursive: true });
     const tmp = apiPath + ".tmp";
-    await downloadFile(`${UPDATE_DIR}/fabric-api.jar`, tmp);
+    await downloadFile(GH_FABRIC_API, tmp);
     const st = await fs.stat(tmp);
     if (st.size < 500000) throw new Error("fabric-api: bad size");
     if (existsSync(apiPath)) await fs.rm(apiPath);
@@ -1177,8 +1405,15 @@ rm -f "$0"
   mirrorNativeJar();
   createWindow();
   autoUpdateJar();
-  // Фоновая подготовка: встроенный клиент (если его вдруг нет) + распаковка JRE.
-  ensureGame().catch(() => {});
+  // Фоновая подготовка: клиент (если недокачан) + распаковка/скачивание JRE.
+  (async () => {
+    try {
+      const libsHasJar = (() => { try { return existsSync(LIBS_DIR) && readdirSync(LIBS_DIR).some((f) => f.toLowerCase().endsWith(".jar")); } catch { return false; } })();
+      if (!existsSync(join(GAME_DIR, "minecraft.jar")) || !libsHasJar) {
+        await ensureGame();
+      }
+    } catch {}
+  })();
   (async () => { try { await ensureBundledJava(); } catch {} })();
 });
 
