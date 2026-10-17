@@ -17,37 +17,60 @@ export function javaBinName() {
   return IS_WIN ? "java.exe" : "java";
 }
 
-// Извлечь архив (zip или tar.gz) в destDir. Сначала системный tar/bsdtar
-// (есть на Debian, Arch, и в Windows 10+ как bsdtar), затем unzip, затем
-// windows Expand-Archive как последний запасной вариант.
+// Извлечь архив (zip или tar.gz) в destDir. Сначала определяем ТИП по магии файла
+// (а не по расширению — CI кладёт tar.gz под именем .zip!), потом распаковываем:
+// gzip → tar -xzf | zip → unzip | иначе системный tar -xf.
 export function extractArchive(archivePath, destDir) {
   mkdirSync(destDir, { recursive: true });
   const lower = archivePath.toLowerCase();
 
-  // 1) tar (bsdtar) — умеет zip и tar.gz кросс-платформенно.
-  let r = run("tar", ["-xf", archivePath, "-C", destDir]);
-  if (r) return true;
+  // Магия: gzip (1f 8b) или zip (PK..)
+  let magic = "";
+  try {
+    const fd = require("node:fs").openSync(archivePath, "r");
+    const b = Buffer.alloc(4);
+    require("node:fs").readSync(fd, b, 0, 4, 0);
+    require("node:fs").closeSync(fd);
+    magic = b.toString("latin1");
+  } catch { magic = ""; }
 
-  // 2) unzip (linux/mac).
-  if (!IS_WIN) {
-    r = run("unzip", ["-o", "-q", archivePath, "-d", destDir]);
+  if (magic === "\x1f\x8b" || lower.endsWith(".tar.gz") || lower.endsWith(".tgz")) {
+    // gzip: tar -xzf (некоторые GNU tar не умеют -xf для gz).
+    let r = run("tar", ["-xzf", archivePath, "-C", destDir]);
     if (r) return true;
-    // 3) tar.gz без bsdtar — через tar|gunzip.
-    if (lower.endsWith(".tar.gz") || lower.endsWith(".tgz")) {
-      r = run("tar", ["-xzf", archivePath, "-C", destDir]);
+    // Фолбэк: gunzip | tar -xf
+    r = run("sh", ["-c", `gunzip -c '${String(archivePath).replace(/'/g, "'\\''")}' | tar -x -C '${String(destDir).replace(/'/g, "'\\''")}'`]);
+    if (r) return true;
+  } else if (magic === "PK\x03\x04") {
+    // zip
+    let r = run("unzip", ["-o", "-q", archivePath, "-d", destDir]);
+    if (r) return true;
+    r = run("tar", ["-xf", archivePath, "-C", destDir]);
+    if (r) return true;
+    if (IS_WIN) {
+      const ps = [
+        "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+        "-Command",
+        `$ErrorActionPreference='Stop'; Expand-Archive -LiteralPath '${archivePath.replace(/'/g, "''")}' -DestinationPath '${destDir.replace(/'/g, "''")}' -Force`,
+      ];
+      r = run("powershell.exe", ps);
       if (r) return true;
     }
-  }
-
-  // 4) Windows PowerShell Expand-Archive (фолбэк).
-  if (IS_WIN && (lower.endsWith(".zip"))) {
-    const ps = [
-      "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-      "-Command",
-      `$ErrorActionPreference='Stop'; Expand-Archive -LiteralPath '${archivePath.replace(/'/g, "''")}' -DestinationPath '${destDir.replace(/'/g, "''")}' -Force`,
-    ];
-    r = run("powershell.exe", ps);
+  } else {
+    // Неизвестный тип — пробуем tar, затем unzip.
+    let r = run("tar", ["-xf", archivePath, "-C", destDir]);
     if (r) return true;
+    r = run("unzip", ["-o", "-q", archivePath, "-d", destDir]);
+    if (r) return true;
+    if (IS_WIN && lower.endsWith(".zip")) {
+      const ps = [
+        "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+        "-Command",
+        `$ErrorActionPreference='Stop'; Expand-Archive -LiteralPath '${archivePath.replace(/'/g, "''")}' -DestinationPath '${destDir.replace(/'/g, "''")}' -Force`,
+      ];
+      r = run("powershell.exe", ps);
+      if (r) return true;
+    }
   }
 
   return false;

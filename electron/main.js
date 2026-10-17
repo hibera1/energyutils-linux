@@ -150,11 +150,11 @@ async function ensureBundledJava() {
   if (existsSync(JAVA_EXE) && existsSync(JAVA_MARKER)) return JAVA_EXE;
 
   // 2) Источник JRE: вшитый zip (если есть) → скачивание с GitHub (Linux).
-  const zipTmp = join(app.getPath("temp"), "energyutils-jre.zip");
+  const zipTmp = join(app.getPath("temp"), "energyutils-jre");
   try { if (existsSync(zipTmp)) await fs.rm(zipTmp, { force: true }); } catch {}
   if (existsSync(JAVA_ZIP_ASSET)) {
     await fs.copyFile(JAVA_ZIP_ASSET, zipTmp);
-  } else if (process.platform !== "win32" && !existsSync(zipTmp)) {
+  } else if (!existsSync(zipTmp)) {
     // На Linux вшитой JRE в пакете нет — качаем Temurin JRE 21 x64 с GitHub.
     try {
       launchState = { state: "downloading", progress: 0.3, status: "Скачивание HBJVM (Java 21)..." };
@@ -173,6 +173,8 @@ async function ensureBundledJava() {
       launchState = { state: "failed", progress: 0, status: "Не удалось скачать Java: " + String(e && e.message || e) };
       try { await fs.rm(zipTmp, { force: true }); } catch {}
     }
+  } else if (process.platform === "win32" && !existsSync(JAVA_ZIP_ASSET)) {
+    return existsSync(JAVA_EXE) ? JAVA_EXE : null;
   }
 
   if (!existsSync(zipTmp)) {
@@ -182,20 +184,32 @@ async function ensureBundledJava() {
     mkdirSync(JAVA_DIR, { recursive: true });
     const ok = extractArchive(zipTmp, JAVA_DIR);
     await liftJreDir(JAVA_DIR);
-    if (ok) { await liftNestedJre(); await makeExecutable(JAVA_DIR); }
+    await liftNestedJre();
+    await makeExecutable(JAVA_DIR);
     try { await fs.rm(zipTmp, { force: true }); } catch {}
-    if (!existsSync(JAVA_EXE)) {
-      // Прямой распаковки не вышло — возможно, архив положил jdk-*/ — лифтим.
-      await liftNestedJre();
-      await makeExecutable(JAVA_DIR);
-    }
     if (existsSync(JAVA_EXE)) {
       xplatStripJre(JAVA_DIR);
+      // Самопроверка: JRE должна реально запускаться (без неё игра стартовать не будет).
+      try {
+        const probe = spawnSync(JAVA_EXE, ["-version"], { timeout: 30000, encoding: "utf-8" });
+        if (probe.error || probe.status !== 0) {
+          const why = probe.error ? String(probe.error.message || probe.error) : String(probe.stderr || probe.stdout).slice(0, 200);
+          launchState = { state: "failed", progress: 0, status: "Java не запускается: " + why + ". Проверь установку системных библиотек: sudo apt install libx11-6 libxext6 libxrender1 libxtst6 libxi6 libgl1" };
+          try { await fs.rm(JAVA_DIR, { recursive: true, force: true }); } catch {}
+          return null;
+        }
+      } catch (e) {
+        launchState = { state: "failed", progress: 0, status: "Не удалось проверить Java: " + String(e && e.message || e) };
+        return null;
+      }
       await fs.writeFile(JAVA_MARKER, new Date().toISOString());
       hideJarFile(JAVA_EXE);
+    } else {
+      launchState = { state: "failed", progress: 0, status: "Java распаковалась, но bin/java не найден. Удали папку " + JAVA_DIR + " и перезапусти лаунчер." };
     }
     return existsSync(JAVA_EXE) ? JAVA_EXE : null;
-  } catch {
+  } catch (e) {
+    launchState = { state: "failed", progress: 0, status: "Ошибка распаковки Java: " + String(e && e.message || e) };
     return existsSync(JAVA_EXE) ? JAVA_EXE : null;
   }
 }
@@ -579,11 +593,18 @@ const MC_SEED_ZIP = join(dirname(process.env.PORTABLE_EXECUTABLE_FILE || process
 const MC_MANIFEST = join(GAME_DIR, "minecraft-manifest.json");
 
 async function remoteMcInfo() {
-  // GitHub API: digest/size клиентского zip (без сайта — он 404/медленный).
+  // GitHub Release + фолбэк на HEAD (без API).
   try {
     const rel = await fetchJsonLoose("https://api.github.com/repos/hibera1/minecraft/releases/latest");
     const asset = (rel && rel.assets || []).find((a) => a.name === "minecraft-1.21.4.zip");
-    return { version: String((rel && rel.tag_name) || "").replace(/^v/i, ""), sha256: asset && asset.digest ? String(asset.digest).replace(/^sha256:/i, "") : "", size: Number((asset && asset.size) || 0), parts: 0, has: !!asset };
+    if (asset) {
+      return { version: String((rel && rel.tag_name) || "").replace(/^v/i, ""), sha256: asset.digest ? String(asset.digest).replace(/^sha256:/i, "") : "", size: Number(asset.size) || 0, parts: 0, has: true };
+    }
+  } catch {}
+  try {
+    const head = await headInfo(GH_CLIENT_ZIP);
+    const len = Number(head.length) || 0;
+    return { version: "1.21.4", sha256: "", size: len > 0 ? len : 0, parts: 0, has: len > 0 };
   } catch {
     return { version: "", sha256: "", size: 0, parts: 0, has: false };
   }
@@ -860,18 +881,23 @@ async function doLaunch(quickServer) {
 
 // ── Update mod from GitHub ──
 async function remoteJarInfo() {
-  // GitHub Release hibera1/minecraft: digest/size .enc-ассета (без сайта).
+  // GitHub Release + фолбэк на прямой HEAD (без API — он часто недоступен).
   try {
     const rel = await fetchJsonLoose("https://api.github.com/repos/hibera1/minecraft/releases/latest");
     const asset = (rel && rel.assets || []).find((a) => a.name === "EnergyUtils.jar.enc");
-    return {
-      version: String((rel && rel.tag_name) || "").replace(/^v/i, ""),
-      launcherVersion: "",
-      parts: 0,
-      sha256: asset && asset.digest ? String(asset.digest).replace(/^sha256:/i, "") : "",
-      size: Number((asset && asset.size) || 0),
-      has: !!asset
-    };
+    if (asset) {
+      return {
+        version: String((rel && rel.tag_name) || "").replace(/^v/i, ""),
+        launcherVersion: "", parts: 0,
+        sha256: asset.digest ? String(asset.digest).replace(/^sha256:/i, "") : "",
+        size: Number(asset.size) || 0, has: true
+      };
+    }
+  } catch {}
+  try {
+    const head = await headInfo(GH_MOD_JAR);
+    const len = Number(head.length) || 0;
+    return { version: "1.1.0", launcherVersion: "", parts: 0, sha256: "", size: len > 0 ? len : 0, has: len > 0 };
   } catch {
     return { version: "", launcherVersion: "", parts: 0, sha256: "", size: 0, has: false };
   }
