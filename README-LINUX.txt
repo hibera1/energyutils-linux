@@ -33,6 +33,9 @@
   - Интернет на первый запуск (GitHub CDN + Mojang)
   - libfuse2 для sandbox (Ubuntu/Debian):
       sudo apt install libfuse2
+  - Java 21 (Temurin) качается с GitHub сама, но ей нужны
+    системные библиотеки X11. Если Java «не запускается»:
+      sudo apt install libx11-6 libxext6 libxrender1 libxtst6 libxi6 libgl1
   - Если вылетает с sandbox: chrome-sandbox требует setuid:
       sudo chown root:root chrome-sandbox
       sudo chmod 4755 chrome-sandbox
